@@ -1,0 +1,2678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Production MIS Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #263346;
+    --border: #334155;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --blue: #3b82f6;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --purple: #8b5cf6;
+    --teal: #14b8a6;
+    --pink: #ec4899;
+  }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* UPLOAD SCREEN */
+  #upload-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 24px; padding: 32px;
+  }
+  .logo { font-size: 2.2rem; font-weight: 700; color: var(--blue); letter-spacing: -1px; }
+  .logo span { color: var(--text); }
+  .upload-sub { color: var(--muted); font-size: 1rem; }
+  .drop-zone {
+    width: 420px; max-width: 100%; border: 2px dashed var(--border); border-radius: 16px;
+    padding: 48px 32px; text-align: center; cursor: pointer; transition: all 0.2s;
+    background: var(--surface);
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--blue); background: var(--surface2); }
+  .drop-zone svg { margin-bottom: 16px; opacity: 0.5; }
+  .drop-zone p { color: var(--muted); margin-bottom: 16px; }
+  .drop-zone strong { color: var(--text); display: block; margin-bottom: 8px; font-size: 1.1rem; }
+  .btn-upload {
+    background: var(--blue); color: #fff; border: none; padding: 10px 24px;
+    border-radius: 8px; font-size: 0.95rem; cursor: pointer; font-weight: 600;
+    transition: background 0.2s;
+  }
+  .btn-upload:hover { background: #2563eb; }
+  #file-input { display: none; }
+  .progress-wrap { width: 420px; max-width: 100%; }
+  .progress-bar-outer { background: var(--surface); border-radius: 99px; height: 6px; overflow: hidden; }
+  .progress-bar-inner { height: 100%; background: var(--blue); border-radius: 99px; width: 0; transition: width 0.3s; }
+  .progress-label { color: var(--muted); font-size: 0.85rem; margin-top: 8px; text-align: center; }
+
+  /* DASHBOARD */
+  #dashboard { display: none; }
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 28px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-title { font-size: 1.2rem; font-weight: 700; color: var(--text); }
+  .header-sub { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .badge { background: var(--blue); color: #fff; font-size: 0.75rem; padding: 4px 10px; border-radius: 99px; font-weight: 600; }
+  .gs-live-badge {
+    font-size: 0.72rem; font-weight: 700; color: #10b981;
+    background: #10b98118; border: 1px solid #10b98140;
+    padding: 4px 10px; border-radius: 99px; letter-spacing: 0.3px;
+  }
+  .btn-reset {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 14px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-reset:hover { border-color: var(--blue); color: var(--blue); }
+  .main { padding: 24px 28px; max-width: 1600px; margin: 0 auto; }
+
+  /* FILTERS */
+  .filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; align-items: center; }
+  .filter-label { color: var(--muted); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.5px; }
+  select {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;
+    outline: none; transition: border-color 0.2s;
+  }
+  select:focus { border-color: var(--blue); }
+
+  /* KPI CARDS */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .kpi-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; position: relative; overflow: hidden;
+  }
+  .kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+    background: var(--accent, var(--blue));
+  }
+  .kpi-label { font-size: 0.75rem; color: var(--muted); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; }
+  .kpi-value { font-size: 1.9rem; font-weight: 700; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+  .kpi-trend { font-size: 0.8rem; margin-top: 4px; font-weight: 600; }
+  .kpi-trend.up { color: var(--green); }
+  .kpi-trend.down { color: var(--red); }
+
+  /* CHART GRID */
+  .chart-grid { display: grid; gap: 20px; }
+  .chart-grid-2 { grid-template-columns: 1fr 1fr; }
+  .chart-grid-3 { grid-template-columns: 2fr 1fr; }
+  .chart-grid-1 { grid-template-columns: 1fr; }
+
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; display: flex; flex-direction: column;
+  }
+  .chart-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .chart-title { font-size: 0.95rem; font-weight: 700; color: var(--text); }
+  .chart-subtitle { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+  .chart-insight {
+    font-size: 0.75rem; background: var(--surface2); border-radius: 6px;
+    padding: 6px 10px; color: var(--muted); max-width: 240px; text-align: right; line-height: 1.4;
+  }
+  .chart-insight strong { color: var(--text); }
+  .chart-body { flex: 1; position: relative; min-height: 220px; }
+
+  /* HIGHLIGHTS */
+  .highlights { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 20px; margin-bottom: 24px; }
+  .highlight-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px;
+  }
+  .highlight-icon {
+    width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; flex-shrink: 0;
+  }
+  .highlight-title { font-size: 0.8rem; font-weight: 700; color: var(--muted); letter-spacing: 0.4px; margin-bottom: 4px; }
+  .highlight-value { font-size: 1rem; font-weight: 700; color: var(--text); }
+  .highlight-desc { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+
+  .section-label {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 12px; margin-top: 8px;
+  }
+  .mb-20 { margin-bottom: 20px; }
+
+  /* INSIGHT TABLES */
+  .insight-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .insight-table th {
+    text-align: left; padding: 8px 14px; color: var(--muted);
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .insight-table th.right, .insight-table td.right { text-align: right; }
+  .insight-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .insight-table tr:last-child td { border-bottom: none; }
+  .insight-table tr:hover td { background: var(--surface2); }
+  .type-pill {
+    display: inline-block; padding: 2px 9px; border-radius: 99px;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .bar-cell { display: flex; align-items: center; gap: 8px; }
+  .mini-bar-outer { flex: 1; height: 6px; background: var(--border); border-radius: 99px; min-width: 60px; }
+  .mini-bar-inner { height: 100%; border-radius: 99px; }
+  .trend-chip { font-size: 0.75rem; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+  .trend-up   { color: #10b981; background: #10b98118; }
+  .trend-down { color: #ef4444; background: #ef444418; }
+  .trend-flat { color: #94a3b8; background: #94a3b818; }
+
+  /* SPEND SHARE PANEL */
+  .kpi-spend-share {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .spend-share-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .spend-share-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .spend-share-row:last-child { margin-bottom: 0; }
+  .spend-share-label { width: 170px; font-size: 0.8rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .spend-share-bar-outer { flex: 1; height: 7px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .spend-share-bar-inner { height: 100%; border-radius: 99px; transition: width 0.4s ease; }
+  .spend-share-pct { width: 44px; text-align: right; font-size: 0.8rem; font-weight: 700; color: var(--text); flex-shrink: 0; }
+  .spend-share-val { width: 72px; text-align: right; font-size: 0.75rem; color: var(--muted); flex-shrink: 0; }
+
+  /* SEARCH INPUT */
+  .table-search {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; outline: none;
+    transition: border-color 0.2s; min-width: 200px;
+  }
+  .table-search:focus { border-color: var(--blue); }
+  .table-search::placeholder { color: var(--muted); }
+
+  /* CPH KPI ROW */
+  .cph-kpi-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .cph-kpi {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; flex: 1; min-width: 160px; position: relative; overflow: hidden;
+  }
+  .cph-kpi::before { content:''; position:absolute; top:0; left:0; width:3px; height:100%; background: var(--kc, var(--blue)); }
+  .cph-kpi-label { font-size: 0.7rem; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .cph-kpi-val { font-size: 1.5rem; font-weight: 700; }
+  .cph-kpi-sub { font-size: 0.72rem; color: var(--muted); margin-top: 3px; }
+
+  /* STATUS BADGE */
+  .status-ok   { color: #10b981; font-size: 0.72rem; font-weight: 700; }
+  .status-warn { color: #f59e0b; font-size: 0.72rem; font-weight: 700; }
+  .status-flag { color: #ef4444; font-size: 0.72rem; font-weight: 700; }
+
+  /* MINI SECTION LABELS */
+  .mini-section-label {
+    font-size: 0.78rem; font-weight: 700; color: var(--blue);
+    letter-spacing: 0.6px; margin-bottom: 12px; margin-top: 4px;
+    padding-left: 10px; border-left: 3px solid var(--blue);
+  }
+  .mini-dim { font-weight: 400; color: var(--muted); letter-spacing: 0; }
+
+  /* GENRE TABS */
+  .genre-tabs-wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .genre-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .genre-tab {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    padding: 7px 20px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .genre-tab:hover { border-color: var(--blue); color: var(--text); }
+  .genre-tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+  /* RED FLAGS PANEL */
+  .red-flags-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .rf-header { font-size: 0.72rem; font-weight: 700; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .rf-cards { display: flex; gap: 10px; flex-wrap: wrap; }
+  .rf-card {
+    display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px;
+    border-radius: 10px; border: 1px solid; min-width: 220px; flex: 1;
+  }
+  .rf-card.critical { background: #ef444410; border-color: #ef444440; }
+  .rf-card.warning  { background: #f59e0b10; border-color: #f59e0b40; }
+  .rf-card.watch    { background: #3b82f610; border-color: #3b82f640; }
+  .rf-icon { font-size: 1.3rem; margin-top: 1px; }
+  .rf-title { font-size: 0.78rem; font-weight: 700; margin-bottom: 3px; }
+  .rf-card.critical .rf-title { color: #ef4444; }
+  .rf-card.warning  .rf-title { color: #f59e0b; }
+  .rf-card.watch    .rf-title { color: #60a5fa; }
+  .rf-body { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+  .rf-body strong { color: var(--text); }
+  .rf-none { font-size: 0.8rem; color: var(--green); padding: 10px 14px; background: #10b98110; border: 1px solid #10b98140; border-radius: 8px; display: inline-block; }
+
+  /* DIMENSION TABLE extra columns */
+  .consec-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    font-size: 0.72rem; font-weight: 700;
+  }
+  .consec-0 { background: #10b98118; color: #10b981; }
+  .consec-1 { background: #10b98118; color: #10b981; }
+  .consec-2 { background: #f59e0b18; color: #f59e0b; }
+  .consec-3 { background: #ef444418; color: #ef4444; }
+
+  /* ANALYTICS PANELS */
+  .analytics-section { margin-bottom: 20px; }
+  .analytics-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .analytics-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .analytics-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; display: flex; flex-direction: column;
+  }
+  .analytics-card-title { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .atab-row { display: flex; gap: 6px; margin-bottom: 10px; }
+  .atab {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 3px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .atab:hover { border-color: var(--blue); color: var(--text); }
+  .atab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .a-table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+  .a-table th { color: var(--muted); font-size: 0.66rem; font-weight: 700; text-transform: uppercase; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .a-table td { padding: 5px 0; border-bottom: 1px solid #ffffff08; color: var(--text); vertical-align: middle; }
+  .a-table tr:last-child td { border-bottom: none; }
+  .a-table .right { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .a-table .total-row td { color: var(--muted); font-size: 0.7rem; padding-top: 6px; border-top: 1px solid var(--border); border-bottom: none; }
+  .a-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; flex-shrink: 0; }
+
+  @media (max-width: 1200px) { .analytics-grid-4 { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 900px) {
+    .chart-grid-2, .chart-grid-3 { grid-template-columns: 1fr; }
+    .analytics-grid-4 { grid-template-columns: 1fr; }
+    .main { padding: 16px; }
+    header { padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="upload-screen">
+  <div class="logo">Content<span>MIS</span></div>
+  <p class="upload-sub">Interactive Production Dashboard</p>
+  <div class="drop-zone" style="cursor:default">
+    <!-- Google Sheets icon -->
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:16px;opacity:0.85">
+      <rect width="48" height="48" rx="8" fill="#0F9D58"/>
+      <rect x="12" y="10" width="24" height="28" rx="2" fill="white"/>
+      <rect x="16" y="16" width="16" height="2" rx="1" fill="#0F9D58"/>
+      <rect x="16" y="21" width="16" height="2" rx="1" fill="#0F9D58"/>
+      <rect x="16" y="26" width="10" height="2" rx="1" fill="#0F9D58"/>
+    </svg>
+    <strong id="gs-status">Connecting to Google Sheets…</strong>
+    <p id="gs-sub" style="margin-top:6px;margin-bottom:0">Fetching latest data</p>
+  </div>
+  <div class="progress-wrap" id="progress-wrap" style="display:block;margin-top:16px">
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="progress-bar" style="width:10%"></div></div>
+    <p class="progress-label" id="progress-label">Connecting…</p>
+  </div>
+  <p id="gs-error" style="display:none;color:#ef4444;font-size:0.85rem;margin-top:12px;text-align:center"></p>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <header>
+    <div>
+      <div class="header-title">Content Production MIS</div>
+      <div class="header-sub" id="header-sub">Loading...</div>
+    </div>
+    <div class="header-right">
+      <span class="badge" id="header-badge">— shows</span>
+      <span class="gs-live-badge">● Live · Google Sheets</span>
+      <button class="btn-reset" onclick="refreshFromSheets()">&#8635; Refresh Data</button>
+    </div>
+  </header>
+
+  <div class="main">
+
+    <!-- FILTERS -->
+    <div class="filters">
+      <span class="filter-label">FILTER BY</span>
+      <select id="filter-month-start" onchange="applyFilters()"><option value="">From: All</option></select>
+      <select id="filter-month-end" onchange="applyFilters()"><option value="">To: All</option></select>
+      <select id="filter-category" onchange="applyFilters()"><option value="">All Categories</option></select>
+      <select id="filter-type" onchange="applyFilters()"><option value="">All Show Types</option></select>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+      <div class="kpi-card" style="--accent:var(--blue)">
+        <div class="kpi-label">Total Spend</div>
+        <div class="kpi-value" id="kpi-spend">—</div>
+        <div class="kpi-sub" id="kpi-spend-sub">all segments combined</div>
+      </div>
+      <div class="kpi-card" style="--accent:var(--purple)">
+        <div class="kpi-label">Editorial Cost</div>
+        <div class="kpi-value" id="kpi-editorial">—</div>
+        <div class="kpi-sub" id="kpi-editorial-sub">— % of total</div>
+      </div>
+      <div class="kpi-card" style="--accent:var(--green)">
+        <div class="kpi-label">VOA / Production Cost</div>
+        <div class="kpi-value" id="kpi-voa">—</div>
+        <div class="kpi-sub" id="kpi-voa-sub">— % of total</div>
+      </div>
+      <div class="kpi-card" style="--accent:var(--amber)">
+        <div class="kpi-label">Post Production Cost</div>
+        <div class="kpi-value" id="kpi-post">—</div>
+        <div class="kpi-sub" id="kpi-post-sub">— % of total</div>
+      </div>
+      <div class="kpi-card" style="--accent:var(--teal)">
+        <div class="kpi-label">Active Shows (In Creation)</div>
+        <div class="kpi-value" id="kpi-active">—</div>
+        <div class="kpi-sub" id="kpi-active-sub">latest month · prod status &gt; 0</div>
+        <div id="kpi-active-genre" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div>
+      </div>
+    </div>
+
+    <!-- HEADER ANALYTICS: 4 PANELS -->
+    <div class="analytics-section">
+      <div class="analytics-top">
+        <span class="kpi-label" style="margin:0">CREATION &amp; LAUNCH ANALYTICS</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:0.7rem;color:var(--muted);font-weight:700;letter-spacing:0.4px">MONTH</span>
+          <select id="analytics-month" onchange="renderHeaderAnalytics()" style="font-size:0.8rem;padding:4px 10px"></select>
+        </div>
+      </div>
+      <div class="analytics-grid-4">
+
+        <!-- P1: Shows in Creation -->
+        <div class="analytics-card">
+          <div class="analytics-card-title">&#9679; Shows In Creation</div>
+          <div class="atab-row">
+            <button class="atab active" onclick="aTab(this,'p1','genre')">By Genre</button>
+            <button class="atab" onclick="aTab(this,'p1','type')">By Show Type</button>
+          </div>
+          <div id="p1-genre"></div>
+          <div id="p1-type" style="display:none"></div>
+        </div>
+
+        <!-- P2: Total Spend (In Creation) -->
+        <div class="analytics-card">
+          <div class="analytics-card-title">&#9679; Total Spend (In Creation)</div>
+          <div class="atab-row">
+            <button class="atab active" onclick="aTab(this,'p2','genre')">By Genre</button>
+            <button class="atab" onclick="aTab(this,'p2','type')">By Show Type</button>
+          </div>
+          <div id="p2-genre"></div>
+          <div id="p2-type" style="display:none"></div>
+        </div>
+
+        <!-- P3: New Launches -->
+        <div class="analytics-card">
+          <div class="analytics-card-title">&#9679; New Launches</div>
+          <div class="atab-row">
+            <button class="atab active" onclick="aTab(this,'p3','genre')">By Genre</button>
+            <button class="atab" onclick="aTab(this,'p3','type')">By Show Type</button>
+          </div>
+          <div id="p3-genre"></div>
+          <div id="p3-type" style="display:none"></div>
+        </div>
+
+        <!-- P4: CPH cross-tab -->
+        <div class="analytics-card">
+          <div class="analytics-card-title">&#9679; CPH — Genre × Show Type</div>
+          <div class="atab-row">
+            <button class="atab active" onclick="aTab(this,'p4','edit')">Editorial</button>
+            <button class="atab" onclick="aTab(this,'p4','prod')">Production</button>
+            <button class="atab" onclick="aTab(this,'p4','post')">Post Prod</button>
+          </div>
+          <div id="p4-edit"></div>
+          <div id="p4-prod" style="display:none"></div>
+          <div id="p4-post" style="display:none"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SPEND SHARE BY SHOW TYPE -->
+    <div class="kpi-spend-share mb-20">
+      <div class="spend-share-header">
+        <span class="kpi-label" style="margin:0">TOTAL SPEND SHARE BY SHOW TYPE</span>
+        <span id="spend-share-period" style="font-size:0.72rem;color:var(--muted)"></span>
+      </div>
+      <div id="kpi-spend-share-bars"></div>
+    </div>
+
+    <!-- HIGHLIGHTS -->
+    <div class="highlights" id="highlights-row"></div>
+
+    <!-- ROW 1: Monthly Spend + Cost Breakdown -->
+    <div class="section-label">SPEND TRENDS</div>
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Monthly Total Spend</div>
+            <div class="chart-subtitle">All segments combined, over time</div>
+          </div>
+          <div class="chart-insight" id="insight-spend"></div>
+        </div>
+        <div class="chart-body"><canvas id="chart-monthly-spend"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Cost by Segment (Monthly)</div>
+            <div class="chart-subtitle">Editorial · VOA · Post Production</div>
+          </div>
+          <div class="chart-insight" id="insight-segment"></div>
+        </div>
+        <div class="chart-body"><canvas id="chart-segment-breakdown"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ROW 2: CPH Trends + Episode Volume -->
+    <div class="section-label">EFFICIENCY & VOLUME</div>
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">CPH Trends by Segment</div>
+            <div class="chart-subtitle">Cost per hour — Editorial · VOA · Post Production</div>
+          </div>
+          <div class="chart-insight" id="insight-cph"></div>
+        </div>
+        <div class="chart-body"><canvas id="chart-cph-trends"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Monthly Episode Volume</div>
+            <div class="chart-subtitle">Approved · In Production · Final Master</div>
+          </div>
+          <div class="chart-insight" id="insight-eps"></div>
+        </div>
+        <div class="chart-body"><canvas id="chart-episode-volume"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ROW 2b: MoM Production Trend -->
+    <div class="section-label">MONTH-ON-MONTH PRODUCTION TREND</div>
+    <div class="chart-grid chart-grid-1 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">MoM Change in Show Production</div>
+            <div class="chart-subtitle">% change vs prior month — Approved Episodes · In Production · Final Masters · Production Hours</div>
+          </div>
+          <div class="chart-insight" id="insight-mom"></div>
+        </div>
+        <div class="chart-body" style="min-height: 240px;"><canvas id="chart-mom-trend"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ROW 3: Show Type Mix + Category Split -->
+    <div class="section-label">CONTENT MIX</div>
+    <div class="chart-grid chart-grid-3 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Show Type Mix — Monthly Spend Share</div>
+            <div class="chart-subtitle">Top 8 show types by spend — all raw column F values</div>
+          </div>
+          <div class="chart-insight" id="insight-type"></div>
+        </div>
+        <div class="chart-body"><canvas id="chart-type-mix"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Genre Split</div>
+            <div class="chart-subtitle">By total spend</div>
+          </div>
+        </div>
+        <div class="chart-body"><canvas id="chart-category-split"></canvas></div>
+      </div>
+    </div>
+
+    <!-- SHOW TYPE INSIGHTS -->
+    <div class="section-label">SHOW TYPE INSIGHTS</div>
+    <div class="chart-grid chart-grid-1 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Show Type — Key Metrics Breakdown</div>
+            <div class="chart-subtitle">Spend share · CPH · Episodes approved · Production hours</div>
+          </div>
+        </div>
+        <div id="showtype-table-wrap" style="overflow-x:auto; margin-top:4px;"></div>
+      </div>
+    </div>
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">CPH Trend by Show Type</div>
+            <div class="chart-subtitle">Weighted cost per production hour, monthly</div>
+          </div>
+          <div class="chart-insight" id="insight-type-cph"></div>
+        </div>
+        <div class="chart-body"><canvas id="chart-type-cph"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Monthly Spend by Show Type</div>
+            <div class="chart-subtitle">Absolute spend — stacked</div>
+          </div>
+        </div>
+        <div class="chart-body"><canvas id="chart-type-spend"></canvas></div>
+      </div>
+    </div>
+
+    <!-- GENRE INSIGHTS -->
+    <div class="section-label">GENRE INSIGHTS</div>
+    <div class="chart-grid chart-grid-1 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Genre — Key Metrics Breakdown</div>
+            <div class="chart-subtitle">Spend share · CPH · Episodes approved · Active shows</div>
+          </div>
+        </div>
+        <div id="genre-table-wrap" style="overflow-x:auto; margin-top:4px;"></div>
+      </div>
+    </div>
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Monthly Spend by Genre</div>
+            <div class="chart-subtitle">Fantasy vs Romance over time</div>
+          </div>
+        </div>
+        <div class="chart-body"><canvas id="chart-genre-spend"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Monthly Episodes Approved by Genre</div>
+            <div class="chart-subtitle">Volume split — Fantasy vs Romance</div>
+          </div>
+        </div>
+        <div class="chart-body"><canvas id="chart-genre-eps"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ROW 4: Top Shows + Writing Type -->
+    <div class="section-label">SHOW PERFORMANCE & WRITING TYPE</div>
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Top 15 Shows by Total Cost</div>
+            <div class="chart-subtitle">Aggregated across selected period</div>
+          </div>
+        </div>
+        <div class="chart-body" style="min-height: 320px;"><canvas id="chart-top-shows"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Writing Type Mix (Monthly Cost)</div>
+            <div class="chart-subtitle">AI · ER · PGC India · PGC US</div>
+          </div>
+          <div class="chart-insight" id="insight-writing"></div>
+        </div>
+        <div class="chart-body"><canvas id="chart-writing-type"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- OVERALL PRODUCTION INSIGHTS                                        -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="section-label" style="margin-top:12px">OVERALL PRODUCTION INSIGHTS</div>
+
+    <!-- Red Flags row -->
+    <div id="red-flags-overall" class="red-flags-wrap mb-20"></div>
+
+    <!-- A: By Editorial Type (Col F) -->
+    <div class="mini-section-label">A · BY EDITORIAL TYPE <span class="mini-dim">(Column F — Type of Show)</span></div>
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header"><div><div class="chart-title">Editorial Type — Metrics &amp; MoM</div><div class="chart-subtitle">Cost · CPH · MoM change · trend status</div></div></div>
+        <div id="ov-editorial-table" style="overflow-x:auto;margin-top:4px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><div><div class="chart-title">Monthly Cost by Editorial Type</div><div class="chart-subtitle">Trend lines — all types</div></div></div>
+        <div class="chart-body"><canvas id="ov-editorial-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- B: By VOA Type (Col L) -->
+    <div class="mini-section-label">B · BY VOA / PRODUCTION TYPE <span class="mini-dim">(Column L — Type of VOA)</span></div>
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header"><div><div class="chart-title">VOA Type — Metrics &amp; MoM</div><div class="chart-subtitle">Cost · CPH · MoM change · trend status</div></div></div>
+        <div id="ov-voa-table" style="overflow-x:auto;margin-top:4px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><div><div class="chart-title">Monthly Cost by VOA Type</div><div class="chart-subtitle">Trend lines — all types</div></div></div>
+        <div class="chart-body"><canvas id="ov-voa-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- C: By Post Production Type (Col N) -->
+    <div class="mini-section-label">C · BY POST PRODUCTION TYPE <span class="mini-dim">(Column N — Type of Sound)</span></div>
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header"><div><div class="chart-title">Post Production Type — Metrics &amp; MoM</div><div class="chart-subtitle">Cost · CPH · MoM change · trend status</div></div></div>
+        <div id="ov-post-table" style="overflow-x:auto;margin-top:4px"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header"><div><div class="chart-title">Monthly Cost by Post Production Type</div><div class="chart-subtitle">Trend lines — all types</div></div></div>
+        <div class="chart-body"><canvas id="ov-post-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- GENRE-LEVEL INSIGHTS                                               -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="section-label" style="margin-top:12px">GENRE-LEVEL INSIGHTS</div>
+
+    <!-- Genre tab switcher -->
+    <div class="genre-tabs-wrap mb-20">
+      <div class="genre-tabs" id="genre-tabs"></div>
+      <!-- View toggle -->
+      <div class="atab-row" style="margin:0 0 0 auto">
+        <button id="gview-dims" class="atab active" onclick="setGenreView('dims')">By Type</button>
+        <button id="gview-mom"  class="atab"        onclick="setGenreView('mom')">MoM Spend</button>
+      </div>
+    </div>
+
+    <!-- ── VIEW: BY TYPE DIMENSIONS ── -->
+    <div id="genre-view-dims">
+      <!-- Red Flags (genre) -->
+      <div id="red-flags-genre" class="red-flags-wrap mb-20"></div>
+
+      <!-- A: Editorial Type (genre) -->
+      <div class="mini-section-label">A · BY EDITORIAL TYPE</div>
+      <div class="chart-grid chart-grid-2 mb-20">
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">Editorial Type — Genre View</div><div class="chart-subtitle">Metrics &amp; MoM for selected genre</div></div></div>
+          <div id="g-editorial-table" style="overflow-x:auto;margin-top:4px"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">Monthly Cost by Editorial Type</div><div class="chart-subtitle">Selected genre only</div></div></div>
+          <div class="chart-body"><canvas id="g-editorial-chart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- B: VOA Type (genre) -->
+      <div class="mini-section-label">B · BY VOA TYPE</div>
+      <div class="chart-grid chart-grid-2 mb-20">
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">VOA Type — Genre View</div><div class="chart-subtitle">Metrics &amp; MoM for selected genre</div></div></div>
+          <div id="g-voa-table" style="overflow-x:auto;margin-top:4px"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">Monthly Cost by VOA Type</div><div class="chart-subtitle">Selected genre only</div></div></div>
+          <div class="chart-body"><canvas id="g-voa-chart"></canvas></div>
+        </div>
+      </div>
+
+      <!-- C: Post Production Type (genre) -->
+      <div class="mini-section-label">C · BY POST PRODUCTION TYPE</div>
+      <div class="chart-grid chart-grid-2 mb-20">
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">Post Production Type — Genre View</div><div class="chart-subtitle">Metrics &amp; MoM for selected genre</div></div></div>
+          <div id="g-post-table" style="overflow-x:auto;margin-top:4px"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">Monthly Cost by Post Production Type</div><div class="chart-subtitle">Selected genre only</div></div></div>
+          <div class="chart-body"><canvas id="g-post-chart"></canvas></div>
+        </div>
+      </div>
+    </div><!-- /genre-view-dims -->
+
+    <!-- ── VIEW: MoM SPEND WITH TRENDLINES ── -->
+    <div id="genre-view-mom" style="display:none">
+      <div class="chart-grid chart-grid-1 mb-20">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title" id="genre-mom-title">MoM Spend — Genre</div>
+              <div class="chart-subtitle">Editorial · Production · Post Production — solid = actual, dashed = trend</div>
+            </div>
+            <div id="genre-mom-summary" class="chart-insight"></div>
+          </div>
+          <div class="chart-body" style="min-height:320px"><canvas id="genre-mom-chart"></canvas></div>
+        </div>
+      </div>
+      <!-- MoM % change table -->
+      <div class="chart-grid chart-grid-3 mb-20">
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">Editorial Spend</div><div class="chart-subtitle">Monthly values &amp; MoM %</div></div></div>
+          <div id="genre-mom-edit-table" style="overflow-x:auto;margin-top:4px"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">Production Spend</div><div class="chart-subtitle">Monthly values &amp; MoM %</div></div></div>
+          <div id="genre-mom-prod-table" style="overflow-x:auto;margin-top:4px"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header"><div><div class="chart-title">Post Production Spend</div><div class="chart-subtitle">Monthly values &amp; MoM %</div></div></div>
+          <div id="genre-mom-post-table" style="overflow-x:auto;margin-top:4px"></div>
+        </div>
+      </div>
+    </div><!-- /genre-view-mom -->
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- SHOW-LEVEL CPH INSIGHTS                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="section-label" style="margin-top:12px">SHOW-LEVEL CPH INSIGHTS</div>
+
+    <!-- CPH summary KPIs -->
+    <div id="cph-show-kpis" class="cph-kpi-row mb-20"></div>
+
+    <!-- CPH Red Flags -->
+    <div id="red-flags-cph" class="red-flags-wrap mb-20"></div>
+
+    <!-- Charts row -->
+    <div class="chart-grid chart-grid-2 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Top 20 Shows — Highest Overall CPH</div><div class="chart-subtitle">$ per final-master hour (aggregated)</div></div>
+        </div>
+        <div class="chart-body" style="min-height:340px"><canvas id="chart-cph-top20"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">CPH Band Distribution</div><div class="chart-subtitle">Shows grouped by cost-per-hour bucket</div></div>
+        </div>
+        <div class="chart-body"><canvas id="chart-cph-bands"></canvas></div>
+      </div>
+    </div>
+
+    <!-- CPH Trend for flagged/top shows -->
+    <div class="chart-grid chart-grid-1 mb-20">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Overall CPH Trend — Top 8 Costliest Shows</div><div class="chart-subtitle">Month-by-month CPH trajectory</div></div>
+          <div class="chart-insight" id="insight-cph-trend"></div>
+        </div>
+        <div class="chart-body" style="min-height:220px"><canvas id="chart-cph-show-trend"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Full sortable / searchable table -->
+    <div class="chart-card mb-20">
+      <div class="chart-header" style="flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="chart-title">All Shows — Full CPH Breakdown</div>
+          <div class="chart-subtitle">Click column headers to sort · search to filter</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" id="cph-search" placeholder="🔍  Search show…" class="table-search" oninput="filterCPHTable()">
+          <select id="cph-sort" class="table-search" onchange="filterCPHTable()" style="width:auto">
+            <option value="overallCPH-desc">Overall CPH ↓</option>
+            <option value="overallCPH-asc">Overall CPH ↑</option>
+            <option value="totalCost-desc">Total Cost ↓</option>
+            <option value="momCPH-desc">MoM CPH ↓</option>
+            <option value="editCPH-desc">Edit CPH ↓</option>
+            <option value="voaCPH-desc">VOA CPH ↓</option>
+            <option value="postCPH-desc">Post CPH ↓</option>
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;margin-top:8px">
+        <table class="insight-table" id="cph-show-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Show</th>
+              <th>Genre</th>
+              <th>Type</th>
+              <th class="right">Edit CPH</th>
+              <th class="right">VOA CPH</th>
+              <th class="right">Post CPH</th>
+              <th class="right">Overall CPH</th>
+              <th class="right">MoM CPH</th>
+              <th class="right">Consec ↑</th>
+              <th class="right">Status</th>
+            </tr>
+          </thead>
+          <tbody id="cph-show-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── GLOBALS ────────────────────────────────────────────────────────────────
+let rawData = [];       // all parsed data rows
+let allMonths = [];     // sorted unique months
+let charts = {};        // Chart.js instances
+
+const MONTHS_MAP = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmt = m => MONTHS_MAP[parseInt(m.slice(4,6))-1] + ' ' + m.slice(0,4);
+const toNum = v => { if (!v) return 0; const n = parseFloat(String(v).replace(/[",\s]/g,'')); return isNaN(n) ? 0 : n; };
+const kFmt = n => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : n.toFixed(0);
+const cFmt = n => '$' + kFmt(n);
+
+const COLORS = {
+  blue:   '#3b82f6', green:  '#10b981', amber:  '#f59e0b',
+  red:    '#ef4444', purple: '#8b5cf6', teal:   '#14b8a6',
+  pink:   '#ec4899', sky:    '#38bdf8', lime:   '#84cc16',
+  orange: '#fb923c'
+};
+
+// Use raw column F value — no bucketing
+function classifyType(t) {
+  if (!t || t === '#N/A' || t.trim() === '') return 'Unknown';
+  return t.trim();
+}
+
+// Dynamic colour picker (consistent colour per label across the session)
+const _typeColorCache = {};
+const _typeColorPalette = [
+  '#3b82f6','#10b981','#f59e0b','#8b5cf6','#14b8a6',
+  '#ec4899','#38bdf8','#fb923c','#84cc16','#ef4444',
+  '#6366f1','#f43f5e','#0ea5e9','#a3e635','#fbbf24',
+  '#34d399','#c084fc','#fb7185','#67e8f9','#fde68a'
+];
+let _typeColorIdx = 0;
+function typeColor(t) {
+  if (!_typeColorCache[t]) {
+    _typeColorCache[t] = _typeColorPalette[_typeColorIdx % _typeColorPalette.length];
+    _typeColorIdx++;
+  }
+  return _typeColorCache[t];
+}
+
+// File handling removed — data loads directly from Google Sheets
+
+// ─── GOOGLE SHEETS INTEGRATION ───────────────────────────────────────────────
+const SHEET_ID  = '1BdZ-izEgRkWcBiaCTSxnXXxxkS0nyhFB-yOmRE-3zuY';
+const SHEET_GID = '0';
+const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+
+function setProgress(pct, label) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+function loadFromGoogleSheets() {
+  document.getElementById('upload-screen').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('gs-status').textContent = 'Connecting to Google Sheets…';
+  document.getElementById('gs-sub').textContent = 'Fetching latest data';
+  document.getElementById('gs-error').style.display = 'none';
+  document.getElementById('progress-wrap').style.display = 'block';
+  setProgress(15, 'Connecting to Google Sheets…');
+
+  fetch(SHEET_CSV_URL)
+    .then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setProgress(45, 'Downloading data…');
+      document.getElementById('gs-status').textContent = 'Downloading data…';
+      return res.text();
+    })
+    .then(csvText => {
+      setProgress(70, 'Parsing…');
+      document.getElementById('gs-status').textContent = 'Parsing data…';
+      Papa.parse(csvText, {
+        skipEmptyLines: false,
+        complete: function(results) {
+          setProgress(90, 'Building dashboard…');
+          setTimeout(() => {
+            // Destroy any existing charts
+            Object.values(charts).forEach(c => c.destroy());
+            charts = {}; rawData = []; allMonths = [];
+            processCSV(results.data);
+            setProgress(100, 'Done!');
+            setTimeout(() => {
+              document.getElementById('upload-screen').style.display = 'none';
+              document.getElementById('dashboard').style.display = 'block';
+            }, 250);
+          }, 50);
+        },
+        error: function(err) { showSheetError('Parse error: ' + err.message); }
+      });
+    })
+    .catch(err => showSheetError('Could not fetch sheet. Ensure it is shared publicly. Error: ' + err.message));
+}
+
+function showSheetError(msg) {
+  setProgress(0, '');
+  document.getElementById('gs-status').textContent = 'Connection failed';
+  document.getElementById('gs-sub').textContent = 'See error below';
+  const el = document.getElementById('gs-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function refreshFromSheets() {
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {}; rawData = []; allMonths = [];
+  // Reset analytics month dropdown so it repopulates with fresh data
+  const amSel = document.getElementById('analytics-month');
+  if (amSel) amSel.innerHTML = '';
+  loadFromGoogleSheets();
+}
+
+// Auto-load on page ready
+document.addEventListener('DOMContentLoaded', loadFromGoogleSheets);
+
+// ─── CSV PROCESSING ──────────────────────────────────────────────────────────
+function processCSV(rows) {
+  // Find header row (contains 'YearMonth')
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(15, rows.length); i++) {
+    if (rows[i][0] && String(rows[i][0]).includes('YearMonth')) { headerIdx = i; break; }
+  }
+  if (headerIdx === -1) { alert('Could not find header row. Ensure first column is YearMonth.'); return; }
+
+  const dataRows = rows.slice(headerIdx + 1);
+  rawData = [];
+
+  dataRows.forEach(row => {
+    const ym = String(row[0] || '').replace(/[",\s]/g, '');
+    if (!ym.match(/^\d{6}$/)) return;
+
+    rawData.push({
+      ym,
+      title:        String(row[2] || '').trim(),
+      tag:          String(row[3] || '').trim(),
+      category:     String(row[4] || '').trim(),
+      showType:     String(row[5] || '').trim(),
+      prodStatus:   toNum(row[7]),
+      writingType:  String(row[10] || '').trim(),
+      voaType:      String(row[11] || '').trim(),
+      soundType:    String(row[13] || '').trim(),
+      underRevEps:  toNum(row[14]),
+      approvedEps:  toNum(row[16]),
+      appWords:     toNum(row[17]),
+      prodEps:      toNum(row[18]),
+      prodHr:       toNum(row[19]),
+      finalMastEps: toNum(row[20]),
+      finalMastHr:  toNum(row[21]),
+      editCost:     toNum(row[28]),
+      editCPH:      toNum(row[29]),
+      voaCost:      toNum(row[36]),
+      voaCPH:       toNum(row[37]),
+      postCost:     toNum(row[43]),
+      postCPH:      toNum(row[44]),
+      totalCost:    toNum(row[46]),
+      segCPH:       toNum(row[47]),
+      newLaunch:    String(row[56] || '').trim().toUpperCase() === 'Y'
+    });
+  });
+
+  allMonths = [...new Set(rawData.map(r => r.ym))].sort();
+  populateFilters();
+  renderDashboard();
+}
+
+// ─── FILTERS ─────────────────────────────────────────────────────────────────
+function populateFilters() {
+  const cats = [...new Set(rawData.map(r => r.category).filter(Boolean))].sort();
+  const types = [...new Set(rawData.map(r => classifyType(r.showType)))].sort();
+
+  const mStart = document.getElementById('filter-month-start');
+  const mEnd = document.getElementById('filter-month-end');
+  [mStart, mEnd].forEach(sel => {
+    while (sel.options.length > 1) sel.remove(1);
+  });
+  allMonths.forEach(m => {
+    mStart.add(new Option(fmt(m), m));
+    mEnd.add(new Option(fmt(m), m));
+  });
+  // Default: full range
+  mStart.value = '';
+  mEnd.value = '';
+
+  const catSel = document.getElementById('filter-category');
+  while (catSel.options.length > 1) catSel.remove(1);
+  cats.forEach(c => catSel.add(new Option(c, c)));
+
+  const typeSel = document.getElementById('filter-type');
+  while (typeSel.options.length > 1) typeSel.remove(1);
+  types.forEach(t => typeSel.add(new Option(t, t)));
+}
+
+function getFilteredData() {
+  const mStart = document.getElementById('filter-month-start').value;
+  const mEnd = document.getElementById('filter-month-end').value;
+  const cat = document.getElementById('filter-category').value;
+  const type = document.getElementById('filter-type').value;
+
+  return rawData.filter(r => {
+    if (r.ym === '202603') return false;
+    if (r.tag === 'Growth Test') return false;
+    if (mStart && r.ym < mStart) return false;
+    if (mEnd && r.ym > mEnd) return false;
+    if (cat && r.category !== cat) return false;
+    if (type && classifyType(r.showType) !== type) return false;
+    return true;
+  });
+}
+
+function applyFilters() { renderDashboard(); }
+
+// ─── HEADER ANALYTICS PANELS ─────────────────────────────────────────────────
+function aTab(btn, panelId, view) {
+  const card = btn.closest('.analytics-card');
+  card.querySelectorAll('.atab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['genre','type'].forEach(v => {
+    const el = document.getElementById(panelId + '-' + v);
+    if (el) el.style.display = v === view ? '' : 'none';
+  });
+}
+
+function _aCountTable(obj, colLabel) {
+  const rows = Object.entries(obj).sort((a,b) => b[1]-a[1]);
+  const total = rows.reduce((s,[,v]) => s+v, 0);
+  if (!rows.length) return '<div style="color:var(--muted);font-size:0.75rem;padding:8px 0">No data</div>';
+  return `<table class="a-table">
+    <thead><tr><th>Group</th><th class="right">${colLabel}</th><th class="right">Share</th></tr></thead>
+    <tbody>
+    ${rows.map(([k,v]) => `<tr><td>${k||'Unknown'}</td><td class="right">${v}</td><td class="right">${total>0?(v/total*100).toFixed(0)+'%':'—'}</td></tr>`).join('')}
+    </tbody>
+    <tfoot><tr class="total-row"><td>Total</td><td class="right">${total}</td><td class="right">100%</td></tr></tfoot>
+  </table>`;
+}
+
+function _aSpendTable(obj) {
+  const rows = Object.entries(obj).sort((a,b) => b[1]-a[1]);
+  const total = rows.reduce((s,[,v]) => s+v, 0);
+  if (!rows.length) return '<div style="color:var(--muted);font-size:0.75rem;padding:8px 0">No data</div>';
+  return `<table class="a-table">
+    <thead><tr><th>Group</th><th class="right">Spend</th><th class="right">Share</th></tr></thead>
+    <tbody>
+    ${rows.map(([k,v]) => `<tr><td>${k||'Unknown'}</td><td class="right">${cFmt(v)}</td><td class="right">${total>0?(v/total*100).toFixed(0)+'%':'—'}</td></tr>`).join('')}
+    </tbody>
+    <tfoot><tr class="total-row"><td>Total</td><td class="right">${cFmt(total)}</td><td class="right">100%</td></tr></tfoot>
+  </table>`;
+}
+
+function _aCPHCrossTab(matrix, genres, metric) {
+  // metric: 'edit' | 'prod' | 'post'
+  const genreColors = { Fantasy:'#3b82f6', Romance:'#ec4899' };
+  const showTypes = Object.keys(matrix).sort();
+  if (!showTypes.length) return '<div style="color:var(--muted);font-size:0.75rem;padding:8px 0">No data</div>';
+
+  const calcCPH = (d, m) => {
+    if (!d) return null;
+    if (m === 'edit') return d.appWords > 0 ? d.editCost / (d.appWords / 10000) : null;
+    if (m === 'prod') return d.prodHr   > 0 ? d.voaCost  / d.prodHr             : null;
+    if (m === 'post') return d.fmHr     > 0 ? d.postCost / d.fmHr               : null;
+    return null;
+  };
+  const n = v => (v != null && isFinite(v) && v > 0) ? '$' + Math.round(v).toLocaleString() : '—';
+
+  return `<div style="overflow-x:auto">
+  <table class="a-table">
+    <thead>
+      <tr>
+        <th style="min-width:110px">Show Type</th>
+        ${genres.map(g => `<th class="right" style="color:${genreColors[g]||'var(--muted)'}">${g}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>
+      ${showTypes.map(t => `<tr>
+        <td style="font-size:0.7rem;padding-right:8px">${t}</td>
+        ${genres.map(g => `<td class="right">${n(calcCPH(matrix[t][g], metric))}</td>`).join('')}
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+function _aCPHTable(obj) {
+  const rows = Object.entries(obj).sort((a,b) => a[0].localeCompare(b[0]));
+  if (!rows.length) return '<div style="color:var(--muted);font-size:0.75rem;padding:8px 0">No data</div>';
+  const n = v => (v != null && isFinite(v)) ? '$' + Math.round(v).toLocaleString() : '—';
+  return `<table class="a-table">
+    <thead><tr><th>Group</th><th class="right">Edit</th><th class="right">Prod</th><th class="right">Post</th></tr></thead>
+    <tbody>
+    ${rows.map(([k,d]) => {
+      const eCPH = d.appWords > 0 ? d.editCost / (d.appWords / 10000) : null;
+      const pCPH = d.prodHr   > 0 ? d.voaCost  / d.prodHr             : null;
+      const oCPH = d.fmHr     > 0 ? d.postCost / d.fmHr               : null;
+      return `<tr><td>${k||'Unknown'}</td><td class="right">${n(eCPH)}</td><td class="right">${n(pCPH)}</td><td class="right">${n(oCPH)}</td></tr>`;
+    }).join('')}
+    </tbody>
+  </table>`;
+}
+
+function renderHeaderAnalytics() {
+  // ── Populate month dropdown (once, from all available months minus 202603) ──
+  const sel = document.getElementById('analytics-month');
+  if (sel.options.length === 0) {
+    const months = allMonths.filter(m => m !== '202603');
+    [...months].reverse().forEach(m => sel.add(new Option(fmt(m), m)));
+    sel.value = months[months.length - 1] || '';
+  }
+  const selMonth = sel.value;
+  if (!selMonth) return;
+
+  // Source: all data for the selected month (Growth Test & 202603 permanently excluded)
+  const base = rawData.filter(r => r.tag !== 'Growth Test' && r.ym !== '202603' && r.ym === selMonth);
+
+  // ── P1: Shows In Creation (prodStatus > 0, deduplicated by title) ──
+  const inCreation = (() => {
+    const seen = {};
+    base.filter(r => r.prodStatus > 0 && r.title && r.title !== 'unallocated')
+        .forEach(r => { if (!seen[r.title]) seen[r.title] = r; });
+    return Object.values(seen);
+  })();
+  const p1g = {}, p1t = {};
+  inCreation.forEach(r => {
+    p1g[r.category||'Other'] = (p1g[r.category||'Other']||0) + 1;
+    p1t[classifyType(r.showType)] = (p1t[classifyType(r.showType)]||0) + 1;
+  });
+  document.getElementById('p1-genre').innerHTML = _aCountTable(p1g, '# Shows');
+  document.getElementById('p1-type').innerHTML  = _aCountTable(p1t, '# Shows');
+
+  // ── P2: Total Spend for shows in creation ──
+  const p2g = {}, p2t = {};
+  base.filter(r => r.prodStatus > 0 && r.title && r.title !== 'unallocated').forEach(r => {
+    p2g[r.category||'Other'] = (p2g[r.category||'Other']||0) + r.totalCost;
+    p2t[classifyType(r.showType)] = (p2t[classifyType(r.showType)]||0) + r.totalCost;
+  });
+  document.getElementById('p2-genre').innerHTML = _aSpendTable(p2g);
+  document.getElementById('p2-type').innerHTML  = _aSpendTable(p2t);
+
+  // ── P3: New Launches (newLaunch === true, deduplicated by title) ──
+  const launches = (() => {
+    const seen = {};
+    base.filter(r => r.newLaunch && r.title && r.title !== 'unallocated')
+        .forEach(r => { if (!seen[r.title]) seen[r.title] = r; });
+    return Object.values(seen);
+  })();
+  const p3g = {}, p3t = {};
+  launches.forEach(r => {
+    p3g[r.category||'Other'] = (p3g[r.category||'Other']||0) + 1;
+    p3t[classifyType(r.showType)] = (p3t[classifyType(r.showType)]||0) + 1;
+  });
+  document.getElementById('p3-genre').innerHTML = _aCountTable(p3g, '# Launches');
+  document.getElementById('p3-type').innerHTML  = _aCountTable(p3t, '# Launches');
+
+  // ── P4: CPH — Genre × Show Type cross-tab ──
+  const p4matrix = {};
+  base.forEach(r => {
+    const g = r.category || 'Other';
+    const t = classifyType(r.showType);
+    if (!p4matrix[t]) p4matrix[t] = {};
+    if (!p4matrix[t][g]) p4matrix[t][g] = { editCost:0, appWords:0, voaCost:0, prodHr:0, postCost:0, fmHr:0 };
+    const d = p4matrix[t][g];
+    d.editCost += r.editCost; d.appWords += r.appWords;
+    d.voaCost  += r.voaCost;  d.prodHr   += r.prodHr;
+    d.postCost += r.postCost; d.fmHr     += r.finalMastHr;
+  });
+  const genres = [...new Set(base.map(r => r.category||'Other'))].sort();
+  document.getElementById('p4-edit').innerHTML = _aCPHCrossTab(p4matrix, genres, 'edit');
+  document.getElementById('p4-prod').innerHTML = _aCPHCrossTab(p4matrix, genres, 'prod');
+  document.getElementById('p4-post').innerHTML = _aCPHCrossTab(p4matrix, genres, 'post');
+}
+
+// ─── RENDER DASHBOARD ─────────────────────────────────────────────────────────
+function renderDashboard() {
+  const data = getFilteredData();
+  const months = [...new Set(data.map(r => r.ym))].sort();
+
+  updateHeader(data, months);
+  updateKPIs(data, months);
+  updateHighlights(data, months);
+  renderMonthlySpend(data, months);
+  renderSegmentBreakdown(data, months);
+  renderCPHTrends(data, months);
+  renderEpisodeVolume(data, months);
+  renderMoMTrend(data, months);
+  renderShowTypeInsights(data, months);
+  renderGenreInsights(data, months);
+  renderTypeMix(data, months);
+  renderCategorySplit(data);
+  renderTopShows(data);
+  renderWritingType(data, months);
+  renderShowCPHInsights(data, months);
+  renderOverallInsights(data, months);
+  buildGenreTabs(data);
+  renderGenreInsights(data, months);
+  renderHeaderAnalytics();
+}
+
+function updateHeader(data, months) {
+  const sub = months.length > 0
+    ? `${fmt(months[0])} – ${fmt(months[months.length-1])}  ·  ${months.length} months`
+    : 'No data';
+  document.getElementById('header-sub').textContent = sub;
+  const shows = new Set(data.map(r => r.title).filter(t => t && t !== 'unallocated')).size;
+  document.getElementById('header-badge').textContent = shows + ' shows';
+}
+
+function updateKPIs(data, months) {
+  const totalSpend = data.reduce((s, r) => s + r.totalCost, 0);
+  const totalEdit  = data.reduce((s, r) => s + r.editCost,  0);
+  const totalVoa   = data.reduce((s, r) => s + r.voaCost,   0);
+  const totalPost  = data.reduce((s, r) => s + r.postCost,  0);
+
+  const pct = (n, d) => d > 0 ? (n / d * 100).toFixed(1) + '%' : '—';
+
+  // MoM for total spend
+  let trendText = '', trendColor = 'var(--muted)';
+  if (months.length >= 2) {
+    const last = data.filter(r => r.ym === months[months.length-1]).reduce((s,r) => s+r.totalCost, 0);
+    const prev = data.filter(r => r.ym === months[months.length-2]).reduce((s,r) => s+r.totalCost, 0);
+    if (prev > 0) {
+      const p = ((last - prev) / prev * 100).toFixed(1);
+      trendText = (last >= prev ? '▲ ' : '▼ ') + Math.abs(p) + '% vs prev month';
+      trendColor = last > prev ? '#f59e0b' : '#10b981';
+    }
+  }
+
+  // Active shows in latest month: prodStatus > 0
+  let activeCount = 0;
+  const activeByGenre = {};
+  if (months.length > 0) {
+    const latestM = months[months.length - 1];
+    const activeRows = data.filter(r => r.ym === latestM && r.prodStatus > 0 && r.title && r.title !== 'unallocated');
+    // dedupe by title, keeping first occurrence's category
+    const seen = {};
+    activeRows.forEach(r => { if (!seen[r.title]) seen[r.title] = r.category; });
+    activeCount = Object.keys(seen).length;
+    Object.values(seen).forEach(cat => {
+      const key = cat || 'Other';
+      activeByGenre[key] = (activeByGenre[key] || 0) + 1;
+    });
+  }
+
+  document.getElementById('kpi-spend').textContent = cFmt(totalSpend);
+  document.getElementById('kpi-spend-sub').innerHTML =
+    trendText ? `<span style="color:${trendColor};font-weight:700">${trendText}</span>` : 'all segments combined';
+
+  document.getElementById('kpi-editorial').textContent = cFmt(totalEdit);
+  document.getElementById('kpi-editorial-sub').textContent = pct(totalEdit, totalSpend) + ' of total spend';
+
+  document.getElementById('kpi-voa').textContent = cFmt(totalVoa);
+  document.getElementById('kpi-voa-sub').textContent = pct(totalVoa, totalSpend) + ' of total spend';
+
+  document.getElementById('kpi-post').textContent = cFmt(totalPost);
+  document.getElementById('kpi-post-sub').textContent = pct(totalPost, totalSpend) + ' of total spend';
+
+  document.getElementById('kpi-active').textContent = activeCount.toLocaleString();
+  document.getElementById('kpi-active-sub').textContent =
+    months.length > 0 ? fmt(months[months.length-1]) + ' · prod status > 0' : 'latest month';
+
+  // Genre breakdown pills
+  const genreColors = { Fantasy: '#3b82f6', Romance: '#ec4899' };
+  const genreOrder = ['Fantasy', 'Romance'];
+  const genreKeys = [...genreOrder.filter(g => activeByGenre[g]),
+                     ...Object.keys(activeByGenre).filter(g => !genreOrder.includes(g))];
+  document.getElementById('kpi-active-genre').innerHTML = genreKeys.map(g => {
+    const color = genreColors[g] || 'var(--muted)';
+    return `<span style="display:inline-flex;align-items:center;gap:5px;background:${color}22;border:1px solid ${color}55;
+      border-radius:99px;padding:3px 10px;font-size:0.72rem;font-weight:700;color:${color}">
+      <span style="width:6px;height:6px;border-radius:50%;background:${color};display:inline-block"></span>
+      ${g}: ${activeByGenre[g]}
+    </span>`;
+  }).join('');
+
+  // ── SPEND SHARE BY SHOW TYPE (raw col F values) ──
+  const typeSpend = {};
+  data.forEach(r => {
+    const t = classifyType(r.showType);
+    typeSpend[t] = (typeSpend[t] || 0) + r.totalCost;
+  });
+  const sorted = Object.entries(typeSpend).filter(([t]) => t !== 'Unknown').sort((a,b) => b[1]-a[1]);
+  const maxVal = sorted[0]?.[1] || 1;
+
+  document.getElementById('spend-share-period').textContent =
+    months.length > 0 ? fmt(months[0]) + ' – ' + fmt(months[months.length-1]) : '';
+
+  document.getElementById('kpi-spend-share-bars').innerHTML = sorted.map(([t, v]) => {
+    const color = typeColor(t);
+    const sharePct = totalSpend > 0 ? (v / totalSpend * 100).toFixed(1) : 0;
+    const barW = (v / maxVal * 100).toFixed(1);
+    return `<div class="spend-share-row">
+      <div class="spend-share-label" title="${t}">${t}</div>
+      <div class="spend-share-bar-outer"><div class="spend-share-bar-inner" style="width:${barW}%;background:${color}"></div></div>
+      <div class="spend-share-pct">${sharePct}%</div>
+      <div class="spend-share-val">${cFmt(v)}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateHighlights(data, months) {
+  const container = document.getElementById('highlights-row');
+  container.innerHTML = '';
+
+  if (months.length === 0) return;
+
+  // Highest spend month
+  const byMonth = {};
+  months.forEach(m => { byMonth[m] = data.filter(r => r.ym === m).reduce((s,r) => s+r.totalCost, 0); });
+  const peakMonth = Object.entries(byMonth).sort((a,b) => b[1]-a[1])[0];
+
+  // Most expensive show type
+  const byType = {};
+  data.forEach(r => {
+    const t = classifyType(r.showType);
+    byType[t] = (byType[t] || 0) + r.totalCost;
+  });
+  const topType = Object.entries(byType).sort((a,b) => b[1]-a[1])[0];
+  const totalSpend = data.reduce((s,r) => s+r.totalCost, 0);
+  const topTypePct = totalSpend > 0 ? (topType[1]/totalSpend*100).toFixed(0) : 0;
+
+  // AI vs Non-AI
+  const aiSpend = data.filter(r => (r.showType||'').toLowerCase().includes('ai')).reduce((s,r)=>s+r.totalCost,0);
+  const aiPct = totalSpend > 0 ? (aiSpend/totalSpend*100).toFixed(0) : 0;
+  const aiEps = data.filter(r => (r.showType||'').toLowerCase().includes('ai')).reduce((s,r)=>s+r.approvedEps,0);
+  const totalEps = data.reduce((s,r)=>s+r.approvedEps,0);
+  const aiEpsPct = totalEps > 0 ? (aiEps/totalEps*100).toFixed(0) : 0;
+
+  // Best CPH type (lowest non-zero)
+  const typeCPH = {};
+  data.forEach(r => {
+    const t = classifyType(r.showType);
+    if (!typeCPH[t]) typeCPH[t] = { cost: 0, hr: 0 };
+    typeCPH[t].cost += r.totalCost;
+    typeCPH[t].hr += r.finalMastHr;
+  });
+  const typesCPH = Object.entries(typeCPH).filter(([,v]) => v.hr > 0).map(([k,v]) => [k, v.cost/v.hr]).sort((a,b)=>a[1]-b[1]);
+
+  const cards = [
+    {
+      icon: '📈', bg: '#3b82f620', title: 'PEAK SPEND MONTH',
+      value: fmt(peakMonth[0]),
+      desc: cFmt(peakMonth[1]) + ' total spend'
+    },
+    {
+      icon: '🏆', bg: '#f59e0b20', title: 'TOP CONTENT TYPE',
+      value: topType[0],
+      desc: topTypePct + '% of total spend'
+    },
+    {
+      icon: '🤖', bg: '#8b5cf620', title: 'AI CONTENT SHARE',
+      value: aiPct + '% of spend',
+      desc: aiEpsPct + '% of all approved episodes'
+    },
+    {
+      icon: '💡', bg: '#10b98120', title: 'MOST EFFICIENT TYPE',
+      value: typesCPH.length ? typesCPH[0][0] : '—',
+      desc: typesCPH.length ? '$' + typesCPH[0][1].toFixed(0) + '/hr CPH' : ''
+    }
+  ];
+
+  cards.forEach(c => {
+    container.innerHTML += `
+      <div class="highlight-card">
+        <div class="highlight-icon" style="background:${c.bg}">${c.icon}</div>
+        <div>
+          <div class="highlight-title">${c.title}</div>
+          <div class="highlight-value">${c.value}</div>
+          <div class="highlight-desc">${c.desc}</div>
+        </div>
+      </div>`;
+  });
+}
+
+// ─── CHART HELPERS ────────────────────────────────────────────────────────────
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+const gridColor = 'rgba(255,255,255,0.06)';
+const tickColor = '#94a3b8';
+const commonScales = (stacked = false) => ({
+  x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } }, stacked },
+  y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 }, callback: v => kFmt(v) }, stacked }
+});
+const commonLegend = { labels: { color: '#f1f5f9', font: { size: 11 }, boxWidth: 12, padding: 16 } };
+const commonTooltip = { backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1, titleColor: '#f1f5f9', bodyColor: '#94a3b8', padding: 10 };
+
+// ─── CHART 1: Monthly Total Spend ────────────────────────────────────────────
+function renderMonthlySpend(data, months) {
+  destroyChart('monthly-spend');
+  const vals = months.map(m => data.filter(r => r.ym === m).reduce((s,r) => s+r.totalCost, 0));
+
+  // Insight
+  const max = Math.max(...vals); const min = Math.min(...vals);
+  const trend = vals.length >= 2 ? ((vals[vals.length-1] - vals[0]) / vals[0] * 100).toFixed(0) : 0;
+  document.getElementById('insight-spend').innerHTML =
+    `<strong>${trend > 0 ? '▲' : '▼'} ${Math.abs(trend)}%</strong> overall trend<br>Peak: ${cFmt(max)}`;
+
+  const ctx = document.getElementById('chart-monthly-spend').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 260);
+  grad.addColorStop(0, 'rgba(59,130,246,0.3)'); grad.addColorStop(1, 'rgba(59,130,246,0)');
+
+  charts['monthly-spend'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: months.map(fmt),
+      datasets: [{ label: 'Total Spend', data: vals, borderColor: COLORS.blue, backgroundColor: grad, fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: COLORS.blue }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { ...commonTooltip, callbacks: { label: ctx => ' ' + cFmt(ctx.raw) } } },
+      scales: commonScales()
+    }
+  });
+}
+
+// ─── CHART 2: Segment Breakdown (Stacked Bar) ─────────────────────────────
+function renderSegmentBreakdown(data, months) {
+  destroyChart('segment-breakdown');
+  const edit = months.map(m => data.filter(r=>r.ym===m).reduce((s,r)=>s+r.editCost,0));
+  const voa  = months.map(m => data.filter(r=>r.ym===m).reduce((s,r)=>s+r.voaCost,0));
+  const post = months.map(m => data.filter(r=>r.ym===m).reduce((s,r)=>s+r.postCost,0));
+
+  const totEdit = edit.reduce((a,b)=>a+b,0);
+  const totVoa  = voa.reduce((a,b)=>a+b,0);
+  const totPost = post.reduce((a,b)=>a+b,0);
+  const tot = totEdit + totVoa + totPost;
+  document.getElementById('insight-segment').innerHTML =
+    tot > 0 ? `Edit <strong>${(totEdit/tot*100).toFixed(0)}%</strong> · VOA <strong>${(totVoa/tot*100).toFixed(0)}%</strong> · Post <strong>${(totPost/tot*100).toFixed(0)}%</strong>` : '';
+
+  charts['segment-breakdown'] = new Chart(document.getElementById('chart-segment-breakdown'), {
+    type: 'bar',
+    data: {
+      labels: months.map(fmt),
+      datasets: [
+        { label: 'Editorial', data: edit, backgroundColor: COLORS.blue + 'cc' },
+        { label: 'VOA', data: voa, backgroundColor: COLORS.green + 'cc' },
+        { label: 'Post Production', data: post, backgroundColor: COLORS.amber + 'cc' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: commonLegend, tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${cFmt(ctx.raw)}` } } },
+      scales: commonScales(true)
+    }
+  });
+}
+
+// ─── CHART 3: CPH Trends ─────────────────────────────────────────────────────
+function renderCPHTrends(data, months) {
+  destroyChart('cph-trends');
+
+  // Weighted CPH per month
+  const editCPH = months.map(m => {
+    const rows = data.filter(r => r.ym === m && r.prodHr > 0);
+    const tc = rows.reduce((s,r)=>s+r.editCost,0);
+    const hr = rows.reduce((s,r)=>s+r.prodHr,0);
+    return hr > 0 ? tc/hr : null;
+  });
+  const voaCPH = months.map(m => {
+    const rows = data.filter(r => r.ym === m && r.prodHr > 0);
+    const tc = rows.reduce((s,r)=>s+r.voaCost,0);
+    const hr = rows.reduce((s,r)=>s+r.prodHr,0);
+    return hr > 0 ? tc/hr : null;
+  });
+  const postCPH = months.map(m => {
+    const rows = data.filter(r => r.ym === m && r.finalMastHr > 0);
+    const tc = rows.reduce((s,r)=>s+r.postCost,0);
+    const hr = rows.reduce((s,r)=>s+r.finalMastHr,0);
+    return hr > 0 ? tc/hr : null;
+  });
+
+  const lastEdit = editCPH.filter(v=>v!=null).slice(-1)[0];
+  const lastVoa  = voaCPH.filter(v=>v!=null).slice(-1)[0];
+  document.getElementById('insight-cph').innerHTML = lastEdit
+    ? `Latest: Edit <strong>$${lastEdit.toFixed(0)}</strong> · VOA <strong>$${(lastVoa||0).toFixed(0)}</strong>`
+    : '';
+
+  charts['cph-trends'] = new Chart(document.getElementById('chart-cph-trends'), {
+    type: 'line',
+    data: {
+      labels: months.map(fmt),
+      datasets: [
+        { label: 'Editorial CPH', data: editCPH, borderColor: COLORS.blue, backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
+        { label: 'VOA CPH', data: voaCPH, borderColor: COLORS.green, backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 },
+        { label: 'Post Prod CPH', data: postCPH, borderColor: COLORS.amber, backgroundColor: 'transparent', tension: 0.3, pointRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: commonLegend, tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: $${(ctx.raw||0).toFixed(0)}` } } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 }, callback: v => '$'+kFmt(v) } }
+      }
+    }
+  });
+}
+
+// ─── CHART 4: Episode Volume ─────────────────────────────────────────────────
+function renderEpisodeVolume(data, months) {
+  destroyChart('episode-volume');
+  const approved = months.map(m => data.filter(r=>r.ym===m).reduce((s,r)=>s+r.approvedEps,0));
+  const prod     = months.map(m => data.filter(r=>r.ym===m).reduce((s,r)=>s+r.prodEps,0));
+  const masters  = months.map(m => data.filter(r=>r.ym===m).reduce((s,r)=>s+r.finalMastEps,0));
+
+  const peakApp = Math.max(...approved);
+  const peakM = months[approved.indexOf(peakApp)];
+  document.getElementById('insight-eps').innerHTML = peakM
+    ? `Peak approvals: <strong>${peakApp.toLocaleString()}</strong><br>in ${fmt(peakM)}`
+    : '';
+
+  charts['episode-volume'] = new Chart(document.getElementById('chart-episode-volume'), {
+    type: 'bar',
+    data: {
+      labels: months.map(fmt),
+      datasets: [
+        { label: 'Approved', data: approved, backgroundColor: COLORS.blue + 'bb' },
+        { label: 'In Production', data: prod, backgroundColor: COLORS.teal + 'bb' },
+        { label: 'Final Master', data: masters, backgroundColor: COLORS.purple + 'bb' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: commonLegend, tooltip: { ...commonTooltip } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ─── CHART MoM: Production MoM Trend ────────────────────────────────────────
+function renderMoMTrend(data, months) {
+  destroyChart('mom-trend');
+  if (months.length < 2) {
+    document.getElementById('insight-mom').textContent = 'Need 2+ months for MoM trend';
+    return;
+  }
+
+  const pct = (curr, prev) => prev > 0 ? parseFloat(((curr - prev) / prev * 100).toFixed(1)) : null;
+
+  const labels = months.slice(1).map(fmt);
+
+  const momApproved = [], momProd = [], momMaster = [], momHours = [];
+  for (let i = 1; i < months.length; i++) {
+    const cur  = data.filter(r => r.ym === months[i]);
+    const prev = data.filter(r => r.ym === months[i - 1]);
+    const sum = (arr, key) => arr.reduce((s, r) => s + r[key], 0);
+    momApproved.push(pct(sum(cur,'approvedEps'),  sum(prev,'approvedEps')));
+    momProd.push(    pct(sum(cur,'prodEps'),       sum(prev,'prodEps')));
+    momMaster.push(  pct(sum(cur,'finalMastEps'),  sum(prev,'finalMastEps')));
+    momHours.push(   pct(sum(cur,'prodHr'),        sum(prev,'prodHr')));
+  }
+
+  // Insight: latest month direction
+  const lastApp = momApproved[momApproved.length - 1];
+  const lastMst = momMaster[momMaster.length - 1];
+  document.getElementById('insight-mom').innerHTML = lastApp != null
+    ? `Latest MoM: Approved <strong style="color:${lastApp>=0?'#10b981':'#ef4444'}">${lastApp>=0?'▲':'▼'}${Math.abs(lastApp)}%</strong>
+       · Masters <strong style="color:${lastMst>=0?'#10b981':'#ef4444'}">${lastMst>=0?'▲':'▼'}${Math.abs(lastMst)}%</strong>`
+    : '';
+
+  charts['mom-trend'] = new Chart(document.getElementById('chart-mom-trend'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Approved Episodes',  data: momApproved, backgroundColor: COLORS.blue   + 'cc', borderRadius: 3 },
+        { label: 'In Production Eps',  data: momProd,     backgroundColor: COLORS.teal   + 'cc', borderRadius: 3 },
+        { label: 'Final Masters',      data: momMaster,   backgroundColor: COLORS.purple + 'cc', borderRadius: 3 },
+        { label: 'Production Hours',   data: momHours,    backgroundColor: COLORS.amber  + 'cc', borderRadius: 3, type: 'line', tension: 0.3, pointRadius: 4, fill: false, borderColor: COLORS.amber, backgroundColor: 'transparent' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: commonLegend,
+        tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw != null ? (ctx.raw >= 0 ? '+' : '') + ctx.raw + '%' : 'N/A'}` } },
+        annotation: {}
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: {
+          grid: { color: gridColor },
+          ticks: { color: tickColor, font: { size: 11 }, callback: v => (v >= 0 ? '+' : '') + v + '%' },
+          afterDataLimits(scale) {
+            const ext = Math.max(Math.abs(scale.min), Math.abs(scale.max));
+            scale.min = -ext - 5; scale.max = ext + 5;
+          }
+        }
+      }
+    }
+  });
+}
+
+// ─── CHART 5: Show Type Mix (Stacked %) ──────────────────────────────────────
+function renderTypeMix(data, months) {
+  destroyChart('type-mix');
+  // Derive top 8 types by total spend — no hardcoding
+  const typeSpendTotals = {};
+  data.forEach(r => { const t = classifyType(r.showType); typeSpendTotals[t] = (typeSpendTotals[t]||0) + r.totalCost; });
+  const types = Object.entries(typeSpendTotals).filter(([t]) => t !== 'Unknown').sort((a,b)=>b[1]-a[1]).slice(0,8).map(([t])=>t);
+
+  const datasets = types.map(t => ({
+    label: t,
+    data: months.map(m => {
+      const mRows = data.filter(r => r.ym === m);
+      const total = mRows.reduce((s,r) => s+r.totalCost, 0);
+      const typeCost = mRows.filter(r => classifyType(r.showType) === t).reduce((s,r) => s+r.totalCost, 0);
+      return total > 0 ? parseFloat((typeCost/total*100).toFixed(1)) : 0;
+    }),
+    backgroundColor: typeColor(t) + 'cc',
+    borderColor: 'transparent'
+  }));
+
+  const latestTotal = data.filter(r => r.ym === months[months.length-1]);
+  const ltTotal = latestTotal.reduce((s,r)=>s+r.totalCost,0);
+  const topType = types[0] || '';
+  const ltTop = latestTotal.filter(r=>classifyType(r.showType)===topType).reduce((s,r)=>s+r.totalCost,0);
+  document.getElementById('insight-type').innerHTML = ltTotal > 0 && topType
+    ? `Latest: <strong>${topType.slice(0,20)}</strong> = <strong>${(ltTop/ltTotal*100).toFixed(0)}%</strong>` : '';
+
+  charts['type-mix'] = new Chart(document.getElementById('chart-type-mix'), {
+    type: 'bar',
+    data: { labels: months.map(fmt), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { ...commonLegend, position: 'bottom' }, tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}%` } } },
+      scales: {
+        x: { stacked: true, grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: { stacked: true, max: 100, grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 }, callback: v => v + '%' } }
+      }
+    }
+  });
+}
+
+// ─── CHART 6: Category Split (Donut) ─────────────────────────────────────────
+function renderCategorySplit(data) {
+  destroyChart('category-split');
+  const cats = {};
+  data.forEach(r => { cats[r.category || 'Other'] = (cats[r.category || 'Other'] || 0) + r.totalCost; });
+  const sorted = Object.entries(cats).sort((a,b) => b[1]-a[1]);
+  const catColors = [COLORS.blue, COLORS.pink, COLORS.amber, COLORS.teal, COLORS.purple, COLORS.green];
+
+  charts['category-split'] = new Chart(document.getElementById('chart-category-split'), {
+    type: 'doughnut',
+    data: {
+      labels: sorted.map(e => e[0]),
+      datasets: [{ data: sorted.map(e => e[1]), backgroundColor: catColors.slice(0, sorted.length), borderWidth: 2, borderColor: '#1e293b' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '62%',
+      plugins: {
+        legend: { ...commonLegend, position: 'bottom' },
+        tooltip: { ...commonTooltip, callbacks: {
+          label: ctx => {
+            const tot = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            return ` ${ctx.label}: ${cFmt(ctx.raw)} (${(ctx.raw/tot*100).toFixed(1)}%)`;
+          }
+        }}
+      }
+    }
+  });
+}
+
+// ─── CHART 7: Top Shows ───────────────────────────────────────────────────────
+function renderTopShows(data) {
+  destroyChart('top-shows');
+  const shows = {};
+  data.filter(r => r.title && r.title !== 'unallocated' && r.title.length > 3)
+    .forEach(r => { shows[r.title] = (shows[r.title]||0) + r.totalCost; });
+
+  const top = Object.entries(shows).sort((a,b)=>b[1]-a[1]).slice(0,15).reverse();
+  const maxVal = top.length ? top[top.length-1][1] : 1;
+
+  const barColors = top.map(([,v]) => {
+    const ratio = v / maxVal;
+    if (ratio > 0.8) return COLORS.blue + 'dd';
+    if (ratio > 0.5) return COLORS.teal + 'dd';
+    return COLORS.purple + 'dd';
+  });
+
+  charts['top-shows'] = new Chart(document.getElementById('chart-top-shows'), {
+    type: 'bar',
+    data: {
+      labels: top.map(e => e[0].length > 30 ? e[0].slice(0,28)+'…' : e[0]),
+      datasets: [{ label: 'Total Cost', data: top.map(e => e[1]), backgroundColor: barColors, borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { ...commonTooltip, callbacks: { label: ctx => ' ' + cFmt(ctx.raw) } } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 }, callback: v => cFmt(v) } },
+        y: { grid: { display: false }, ticks: { color: tickColor, font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ─── SHOW TYPE INSIGHTS ──────────────────────────────────────────────────────
+function renderShowTypeInsights(data, months) {
+  destroyChart('type-cph'); destroyChart('type-spend');
+
+  // Derive types dynamically from data — no hardcoding
+  const _allTypes = [...new Set(data.map(r => classifyType(r.showType)).filter(t => t !== 'Unknown'))];
+  const totalSpend = data.reduce((s,r) => s + r.totalCost, 0);
+
+  // Aggregate per type
+  const stats = _allTypes.map(t => {
+    const rows = data.filter(r => classifyType(r.showType) === t);
+    const spend  = rows.reduce((s,r) => s + r.totalCost, 0);
+    const hrs    = rows.reduce((s,r) => s + r.prodHr, 0);
+    const fmHrs  = rows.reduce((s,r) => s + r.finalMastHr, 0);
+    const eps    = rows.reduce((s,r) => s + r.approvedEps, 0);
+    const shows  = new Set(rows.map(r => r.title).filter(Boolean)).size;
+    const cph    = hrs > 0 ? spend / hrs : 0;
+    const sharePct = totalSpend > 0 ? spend / totalSpend * 100 : 0;
+
+    // MoM for latest month
+    let mom = null;
+    if (months.length >= 2) {
+      const cur  = rows.filter(r => r.ym === months[months.length-1]).reduce((s,r)=>s+r.totalCost,0);
+      const prev = rows.filter(r => r.ym === months[months.length-2]).reduce((s,r)=>s+r.totalCost,0);
+      if (prev > 0) mom = ((cur - prev) / prev * 100);
+    }
+    return { t, spend, hrs, fmHrs, eps, shows, cph, sharePct, mom };
+  }).filter(s => s.spend > 0).sort((a,b) => b.spend - a.spend);
+
+  const maxSpend = stats[0]?.spend || 1;
+
+  // Table
+  const trendChip = mom => {
+    if (mom == null) return '<span class="trend-chip trend-flat">—</span>';
+    const cls = mom > 2 ? 'trend-up' : mom < -2 ? 'trend-down' : 'trend-flat';
+    const sym = mom > 0 ? '▲' : mom < 0 ? '▼' : '–';
+    return `<span class="trend-chip ${cls}">${sym} ${Math.abs(mom).toFixed(1)}%</span>`;
+  };
+
+  let html = `<table class="insight-table">
+    <thead><tr>
+      <th>Show Type</th>
+      <th class="right">Total Spend</th>
+      <th>Spend Share</th>
+      <th class="right">Avg CPH</th>
+      <th class="right">Approved Eps</th>
+      <th class="right">Prod Hours</th>
+      <th class="right">Active Shows</th>
+      <th class="right">MoM Spend</th>
+    </tr></thead><tbody>`;
+
+  stats.forEach((s, i) => {
+    const color = typeColor(s.t);
+    html += `<tr>
+      <td><span class="type-pill" style="background:${color}22;color:${color}">${s.t}</span></td>
+      <td class="right" style="font-weight:700">${cFmt(s.spend)}</td>
+      <td>
+        <div class="bar-cell">
+          <div class="mini-bar-outer"><div class="mini-bar-inner" style="width:${s.sharePct}%;background:${color}"></div></div>
+          <span style="color:var(--muted);min-width:36px">${s.sharePct.toFixed(1)}%</span>
+        </div>
+      </td>
+      <td class="right">$${s.cph.toFixed(0)}</td>
+      <td class="right">${s.eps.toLocaleString()}</td>
+      <td class="right">${s.hrs.toFixed(0)}</td>
+      <td class="right">${s.shows}</td>
+      <td class="right">${trendChip(s.mom)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('showtype-table-wrap').innerHTML = html;
+
+  // CPH trend by type (line)
+  const typesWithData = stats.map(s => s.t);
+  const cphDatasets = typesWithData.map(t => {
+    const color = typeColor(t);
+    return {
+      label: t,
+      data: months.map(m => {
+        const rows = data.filter(r => r.ym === m && classifyType(r.showType) === t);
+        const tc = rows.reduce((s,r)=>s+r.totalCost,0);
+        const hr = rows.reduce((s,r)=>s+r.prodHr,0);
+        return hr > 0 ? parseFloat((tc/hr).toFixed(1)) : null;
+      }),
+      borderColor: color, backgroundColor: 'transparent',
+      tension: 0.3, pointRadius: 3, spanGaps: true
+    };
+  });
+
+  const bestType = stats.reduce((a,b) => a.cph < b.cph ? a : b);
+  document.getElementById('insight-type-cph').innerHTML =
+    `Most efficient: <strong>${bestType.t}</strong><br>$${bestType.cph.toFixed(0)}/hr avg CPH`;
+
+  charts['type-cph'] = new Chart(document.getElementById('chart-type-cph'), {
+    type: 'line',
+    data: { labels: months.map(fmt), datasets: cphDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { ...commonLegend, position: 'bottom' }, tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw != null ? '$'+ctx.raw : 'N/A'}` } } },
+      scales: {
+        x: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:11}} },
+        y: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:11},callback:v=>'$'+kFmt(v)} }
+      }
+    }
+  });
+
+  // Spend stacked bar by type
+  const spendDatasets = typesWithData.map(t => {
+    const color = typeColor(t);
+    return {
+      label: t,
+      data: months.map(m => data.filter(r=>r.ym===m && classifyType(r.showType)===t).reduce((s,r)=>s+r.totalCost,0)),
+      backgroundColor: color + 'cc'
+    };
+  });
+
+  charts['type-spend'] = new Chart(document.getElementById('chart-type-spend'), {
+    type: 'bar',
+    data: { labels: months.map(fmt), datasets: spendDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { ...commonLegend, position: 'bottom' }, tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${cFmt(ctx.raw)}` } } },
+      scales: commonScales(true)
+    }
+  });
+}
+
+// ─── GENRE INSIGHTS ───────────────────────────────────────────────────────────
+function renderGenreInsights(data, months) {
+  destroyChart('genre-spend'); destroyChart('genre-eps');
+
+  const genres = [...new Set(data.map(r => r.category).filter(Boolean))].sort();
+  const GENRE_COLORS = [COLORS.blue, COLORS.pink, COLORS.amber, COLORS.teal, COLORS.purple, COLORS.green];
+  const totalSpend = data.reduce((s,r) => s + r.totalCost, 0);
+  const totalEps   = data.reduce((s,r) => s + r.approvedEps, 0);
+
+  const stats = genres.map(g => {
+    const rows  = data.filter(r => r.category === g);
+    const spend = rows.reduce((s,r) => s + r.totalCost, 0);
+    const eps   = rows.reduce((s,r) => s + r.approvedEps, 0);
+    const hrs   = rows.reduce((s,r) => s + r.prodHr, 0);
+    const fmHrs = rows.reduce((s,r) => s + r.finalMastHr, 0);
+    const cph   = fmHrs > 0 ? spend / fmHrs : hrs > 0 ? spend / hrs : 0;
+    const shows = new Set(rows.map(r => r.title).filter(Boolean)).size;
+    const spendPct = totalSpend > 0 ? spend/totalSpend*100 : 0;
+    const epsPct   = totalEps   > 0 ? eps/totalEps*100    : 0;
+
+    // MoM spend
+    let mom = null;
+    if (months.length >= 2) {
+      const cur  = rows.filter(r => r.ym === months[months.length-1]).reduce((s,r)=>s+r.totalCost,0);
+      const prev = rows.filter(r => r.ym === months[months.length-2]).reduce((s,r)=>s+r.totalCost,0);
+      if (prev > 0) mom = (cur - prev) / prev * 100;
+    }
+    // Best month
+    const byMonth = months.map(m => rows.filter(r=>r.ym===m).reduce((s,r)=>s+r.approvedEps,0));
+    const peakEps = Math.max(...byMonth);
+    const peakM   = months[byMonth.indexOf(peakEps)];
+
+    return { g, spend, eps, hrs, fmHrs, cph, shows, spendPct, epsPct, mom, peakEps, peakM };
+  }).filter(s => s.spend > 0).sort((a,b) => b.spend - a.spend);
+
+  const trendChip = mom => {
+    if (mom == null) return '<span class="trend-chip trend-flat">—</span>';
+    const cls = mom > 2 ? 'trend-up' : mom < -2 ? 'trend-down' : 'trend-flat';
+    const sym = mom > 0 ? '▲' : mom < 0 ? '▼' : '–';
+    return `<span class="trend-chip ${cls}">${sym} ${Math.abs(mom).toFixed(1)}%</span>`;
+  };
+
+  // Table
+  let html = `<table class="insight-table">
+    <thead><tr>
+      <th>Genre</th>
+      <th class="right">Total Spend</th>
+      <th>Spend Share</th>
+      <th class="right">Eps Share</th>
+      <th class="right">Avg CPH</th>
+      <th class="right">Approved Eps</th>
+      <th class="right">Active Shows</th>
+      <th class="right">Peak Eps Month</th>
+      <th class="right">MoM Spend</th>
+    </tr></thead><tbody>`;
+
+  stats.forEach((s, i) => {
+    const color = GENRE_COLORS[i] || COLORS.sky;
+    html += `<tr>
+      <td><span class="type-pill" style="background:${color}22;color:${color}">${s.g}</span></td>
+      <td class="right" style="font-weight:700">${cFmt(s.spend)}</td>
+      <td>
+        <div class="bar-cell">
+          <div class="mini-bar-outer"><div class="mini-bar-inner" style="width:${s.spendPct}%;background:${color}"></div></div>
+          <span style="color:var(--muted);min-width:36px">${s.spendPct.toFixed(1)}%</span>
+        </div>
+      </td>
+      <td class="right">${s.epsPct.toFixed(1)}%</td>
+      <td class="right">$${s.cph.toFixed(0)}</td>
+      <td class="right">${s.eps.toLocaleString()}</td>
+      <td class="right">${s.shows}</td>
+      <td class="right">${s.peakM ? fmt(s.peakM)+' ('+s.peakEps+' eps)' : '—'}</td>
+      <td class="right">${trendChip(s.mom)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('genre-table-wrap').innerHTML = html;
+
+  // Monthly spend by genre
+  const genreColors = stats.map((_,i) => GENRE_COLORS[i] || COLORS.sky);
+  charts['genre-spend'] = new Chart(document.getElementById('chart-genre-spend'), {
+    type: 'bar',
+    data: {
+      labels: months.map(fmt),
+      datasets: stats.map((s, i) => ({
+        label: s.g,
+        data: months.map(m => data.filter(r=>r.ym===m && r.category===s.g).reduce((acc,r)=>acc+r.totalCost,0)),
+        backgroundColor: genreColors[i] + 'cc'
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: commonLegend, tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${cFmt(ctx.raw)}` } } },
+      scales: commonScales(true)
+    }
+  });
+
+  // Monthly approved eps by genre
+  charts['genre-eps'] = new Chart(document.getElementById('chart-genre-eps'), {
+    type: 'bar',
+    data: {
+      labels: months.map(fmt),
+      datasets: stats.map((s, i) => ({
+        label: s.g,
+        data: months.map(m => data.filter(r=>r.ym===m && r.category===s.g).reduce((acc,r)=>acc+r.approvedEps,0)),
+        backgroundColor: genreColors[i] + 'cc'
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: commonLegend, tooltip: { ...commonTooltip } },
+      scales: commonScales(true)
+    }
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SHOW-LEVEL CPH INSIGHTS
+// ════════════════════════════════════════════════════════════════════════════
+
+let cphShowData = [];   // cached show stats for table filter/sort
+
+function buildShowCPHStats(data, months) {
+  const showMap = {};
+  const SKIP = new Set(['unallocated', 'solo leveling', '']);
+
+  data.forEach(r => {
+    const key = r.title?.trim();
+    if (!key || SKIP.has(key.toLowerCase())) return;
+    if (!showMap[key]) showMap[key] = { title: key, category: r.category, showType: r.showType,
+      editCost:0, voaCost:0, postCost:0, totalCost:0,
+      prodHr:0, finalMastHr:0, byMonth:{} };
+    const s = showMap[key];
+    s.editCost   += r.editCost;
+    s.voaCost    += r.voaCost;
+    s.postCost   += r.postCost;
+    s.totalCost  += r.totalCost;
+    s.prodHr     += r.prodHr;
+    s.finalMastHr+= r.finalMastHr;
+    // monthly for trend + MoM
+    if (!s.byMonth[r.ym]) s.byMonth[r.ym] = { cost:0, prodHr:0, fmHr:0 };
+    s.byMonth[r.ym].cost   += r.totalCost;
+    s.byMonth[r.ym].prodHr += r.prodHr;
+    s.byMonth[r.ym].fmHr   += r.finalMastHr;
+  });
+
+  return Object.values(showMap).map(s => {
+    const hrBase = s.finalMastHr > 0 ? s.finalMastHr : s.prodHr;
+    const overallCPH = hrBase > 0 ? s.totalCost / hrBase : null;
+    const editCPH    = s.prodHr > 0    ? s.editCost  / s.prodHr    : null;
+    const voaCPH     = s.prodHr > 0    ? s.voaCost   / s.prodHr    : null;
+    const postCPH    = hrBase > 0      ? s.postCost  / hrBase      : null;
+
+    // MoM overall CPH
+    const sortedM = months.filter(m => s.byMonth[m]);
+    let momCPH = null, consec = 0;
+    if (sortedM.length >= 2) {
+      const calcCPH = m => {
+        const b = s.byMonth[m];
+        const hr = b.fmHr > 0 ? b.fmHr : b.prodHr;
+        return hr > 0 ? b.cost / hr : null;
+      };
+      const last = calcCPH(sortedM[sortedM.length-1]);
+      const prev = calcCPH(sortedM[sortedM.length-2]);
+      if (last !== null && prev !== null && prev > 0) momCPH = (last - prev) / prev * 100;
+
+      // Trailing consecutive CPH increases
+      for (let i = sortedM.length - 1; i >= 1; i--) {
+        const c = calcCPH(sortedM[i]), p = calcCPH(sortedM[i-1]);
+        if (c !== null && p !== null && c > p) consec++;
+        else break;
+      }
+    }
+
+    // Monthly CPH series (for trend chart)
+    const monthlyOvCPH = months.map(m => {
+      const b = s.byMonth[m];
+      if (!b) return null;
+      const hr = b.fmHr > 0 ? b.fmHr : b.prodHr;
+      return hr > 0 ? b.cost / hr : null;
+    });
+
+    // Status
+    let status = 'ok';
+    if (consec >= 3 || (momCPH !== null && momCPH > 30)) status = 'flag';
+    else if (consec === 2 || (momCPH !== null && momCPH > 15)) status = 'warn';
+
+    return { ...s, overallCPH, editCPH, voaCPH, postCPH, momCPH, consec, status, monthlyOvCPH };
+  }).filter(s => s.overallCPH !== null && s.overallCPH > 0);
+}
+
+function renderShowCPHInsights(data, months) {
+  const stats = buildShowCPHStats(data, months);
+  cphShowData = stats;
+
+  // ── KPI ROW ──
+  const allCPH = stats.map(s => s.overallCPH).filter(Boolean);
+  const avgCPH  = allCPH.length ? allCPH.reduce((a,b)=>a+b,0)/allCPH.length : 0;
+  const maxShow = [...stats].sort((a,b) => b.overallCPH - a.overallCPH)[0];
+  const minShow = [...stats].filter(s=>s.overallCPH>0).sort((a,b) => a.overallCPH - b.overallCPH)[0];
+  const flaggedN = stats.filter(s => s.status !== 'ok').length;
+  const p75 = allCPH.sort((a,b)=>a-b)[Math.floor(allCPH.length*0.75)] || 0;
+
+  document.getElementById('cph-show-kpis').innerHTML = [
+    { label: 'Avg Overall CPH', val: '$'+avgCPH.toFixed(0), sub: 'across all shows', kc: COLORS.blue },
+    { label: 'Highest CPH Show', val: maxShow ? '$'+maxShow.overallCPH.toFixed(0) : '—', sub: maxShow?.title?.slice(0,28) || '', kc: COLORS.red },
+    { label: 'Lowest CPH Show',  val: minShow ? '$'+minShow.overallCPH.toFixed(0) : '—', sub: minShow?.title?.slice(0,28) || '', kc: COLORS.green },
+    { label: '75th Pct CPH', val: '$'+p75.toFixed(0), sub: '25% of shows above this', kc: COLORS.amber },
+    { label: 'Flagged Shows', val: flaggedN, sub: 'rising CPH or spike', kc: flaggedN > 0 ? COLORS.red : COLORS.green }
+  ].map(k => `<div class="cph-kpi" style="--kc:${k.kc}"><div class="cph-kpi-label">${k.label}</div><div class="cph-kpi-val">${k.val}</div><div class="cph-kpi-sub">${k.sub}</div></div>`).join('');
+
+  // ── RED FLAGS ──
+  const flags = stats
+    .filter(s => s.status !== 'ok')
+    .sort((a,b) => (b.status==='flag'?2:1) - (a.status==='flag'?2:1) || b.overallCPH - a.overallCPH)
+    .slice(0, 8)
+    .map(s => {
+      const sev = s.status === 'flag' ? 'critical' : 'warning';
+      const parts = [];
+      if (s.consec >= 2) parts.push(`CPH rising for <strong>${s.consec} consecutive months</strong>`);
+      if (s.momCPH !== null && Math.abs(s.momCPH) > 10) parts.push(`MoM CPH: <strong>${s.momCPH>=0?'+':''}${s.momCPH.toFixed(1)}%</strong>`);
+      parts.push(`Overall CPH: <strong>$${s.overallCPH.toFixed(0)}</strong> · ${s.category}`);
+      return { group: s.title, severity: sev, msg: s.title.slice(0,40), detail: parts.join(' · ') };
+    });
+  renderRedFlags(flags, 'red-flags-cph');
+
+  // ── TOP 20 CPH BAR CHART ──
+  destroyChart('cph-top20');
+  const top20 = [...stats].sort((a,b) => b.overallCPH - a.overallCPH).slice(0, 20).reverse();
+  const barColors = top20.map(s =>
+    s.status==='flag' ? COLORS.red+'cc' : s.status==='warn' ? COLORS.amber+'cc' : COLORS.blue+'cc');
+
+  charts['cph-top20'] = new Chart(document.getElementById('chart-cph-top20'), {
+    type: 'bar',
+    data: {
+      labels: top20.map(s => s.title.length > 28 ? s.title.slice(0,26)+'…' : s.title),
+      datasets: [{ label: 'Overall CPH', data: top20.map(s => parseFloat(s.overallCPH.toFixed(1))),
+        backgroundColor: barColors, borderRadius: 3 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false}, tooltip:{ ...commonTooltip, callbacks:{ label: ctx => ` $${ctx.raw}/hr` } } },
+      scales: {
+        x: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:10},callback:v=>'$'+v} },
+        y: { grid:{display:false}, ticks:{color:tickColor,font:{size:10}} }
+      }
+    }
+  });
+
+  // ── CPH BAND DISTRIBUTION ──
+  destroyChart('cph-bands');
+  const bands = [
+    { label:'< $50',     min:0,    max:50    },
+    { label:'$50–150',   min:50,   max:150   },
+    { label:'$150–300',  min:150,  max:300   },
+    { label:'$300–600',  min:300,  max:600   },
+    { label:'$600–1000', min:600,  max:1000  },
+    { label:'> $1000',   min:1000, max:Infinity }
+  ];
+  const bandCounts = bands.map(b => stats.filter(s => s.overallCPH >= b.min && s.overallCPH < b.max).length);
+  const bandColors = [COLORS.green+'cc', COLORS.teal+'cc', COLORS.blue+'cc', COLORS.amber+'cc', COLORS.orange+'cc', COLORS.red+'cc'];
+
+  charts['cph-bands'] = new Chart(document.getElementById('chart-cph-bands'), {
+    type: 'bar',
+    data: {
+      labels: bands.map(b => b.label),
+      datasets: [{ label:'# Shows', data: bandCounts, backgroundColor: bandColors, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false}, tooltip:{ ...commonTooltip,
+        callbacks:{ label: ctx => {
+          const b = bands[ctx.dataIndex];
+          const shows = stats.filter(s => s.overallCPH >= b.min && s.overallCPH < b.max);
+          const totalC = shows.reduce((a,s)=>a+s.totalCost,0);
+          return [` ${ctx.raw} shows`, ` Total spend: ${cFmt(totalC)}`];
+        }} }
+      },
+      scales: {
+        x: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:11}} },
+        y: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:11},stepSize:1} }
+      }
+    }
+  });
+
+  // ── CPH TREND FOR TOP 8 COSTLIEST SHOWS ──
+  destroyChart('cph-show-trend');
+  const top8 = [...stats].sort((a,b) => b.overallCPH - a.overallCPH).slice(0, 8);
+  const trendColors = [COLORS.red,COLORS.amber,COLORS.orange,COLORS.purple,COLORS.blue,COLORS.teal,COLORS.green,COLORS.pink];
+
+  const risingCount = top8.filter(s => s.momCPH !== null && s.momCPH > 0).length;
+  document.getElementById('insight-cph-trend').innerHTML =
+    `<strong>${risingCount}/${top8.length}</strong> of top-8 have<br>rising CPH this month`;
+
+  charts['cph-show-trend'] = new Chart(document.getElementById('chart-cph-show-trend'), {
+    type: 'line',
+    data: {
+      labels: months.map(fmt),
+      datasets: top8.map((s, i) => ({
+        label: s.title.length > 22 ? s.title.slice(0,20)+'…' : s.title,
+        data: s.monthlyOvCPH,
+        borderColor: trendColors[i], backgroundColor: 'transparent',
+        tension: 0.3, pointRadius: 3, spanGaps: true,
+        borderDash: s.status === 'flag' ? [] : s.status === 'warn' ? [4,3] : [2,4]
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { ...commonLegend, position:'bottom' },
+        tooltip: { ...commonTooltip, callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.raw!==null?'$'+ctx.raw.toFixed(0):'N/A'}` } }
+      },
+      scales: {
+        x: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:11}} },
+        y: { grid:{color:gridColor}, ticks:{color:tickColor,font:{size:11},callback:v=>'$'+v} }
+      }
+    }
+  });
+
+  // ── FULL TABLE (initial render) ──
+  filterCPHTable();
+}
+
+// ─── SORTABLE / SEARCHABLE TABLE ─────────────────────────────────────────────
+function filterCPHTable() {
+  const query  = (document.getElementById('cph-search')?.value || '').toLowerCase();
+  const sortBy = document.getElementById('cph-sort')?.value || 'overallCPH-desc';
+  const [field, dir] = sortBy.split('-');
+
+  let rows = cphShowData.filter(s =>
+    !query || s.title.toLowerCase().includes(query) ||
+    (s.category||'').toLowerCase().includes(query) ||
+    (s.showType||'').toLowerCase().includes(query)
+  );
+
+  rows.sort((a, b) => {
+    const va = a[field] ?? -Infinity, vb = b[field] ?? -Infinity;
+    return dir === 'asc' ? va - vb : vb - va;
+  });
+
+  const statusCls = { ok:'status-ok', warn:'status-warn', flag:'status-flag' };
+  const statusLbl = { ok:'✓ OK', warn:'⚠ Watch', flag:'🔴 Flag' };
+  const momFmt = v => v == null ? '—' : `${v>=0?'+':''}${v.toFixed(1)}%`;
+  const momColor = v => v == null ? 'var(--muted)' : v > 20 ? '#ef4444' : v > 8 ? '#f59e0b' : v < -5 ? '#10b981' : 'var(--muted)';
+  const cphFmt = v => v == null ? '—' : '$'+v.toFixed(0);
+
+  const tbody = document.getElementById('cph-show-tbody');
+  tbody.innerHTML = rows.map((s, i) => `
+    <tr>
+      <td style="color:var(--muted);font-size:0.75rem">${i+1}</td>
+      <td style="font-weight:600;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.title}">${s.title}</td>
+      <td><span class="type-pill" style="background:${s.category==='Fantasy'?COLORS.blue+'22':COLORS.pink+'22'};color:${s.category==='Fantasy'?COLORS.blue:COLORS.pink}">${s.category||'—'}</span></td>
+      <td style="font-size:0.75rem;color:var(--muted);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.showType}">${(s.showType||'').slice(0,18)}</td>
+      <td class="right">${cphFmt(s.editCPH)}</td>
+      <td class="right">${cphFmt(s.voaCPH)}</td>
+      <td class="right">${cphFmt(s.postCPH)}</td>
+      <td class="right" style="font-weight:700">${cphFmt(s.overallCPH)}</td>
+      <td class="right" style="color:${momColor(s.momCPH)};font-weight:700">${momFmt(s.momCPH)}</td>
+      <td class="right"><span class="consec-badge ${s.consec>=3?'consec-3':s.consec===2?'consec-2':s.consec===1?'consec-1':'consec-0'}">${s.consec===0?'–':s.consec+'↑'}</span></td>
+      <td class="right"><span class="${statusCls[s.status]}">${statusLbl[s.status]}</span></td>
+    </tr>`).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// OVERALL PRODUCTION INSIGHTS + GENRE INSIGHTS
+// ════════════════════════════════════════════════════════════════════════════
+
+let currentGenre = '';
+
+// ─── RED FLAG DETECTOR ───────────────────────────────────────────────────────
+// Returns array of flag objects { group, severity, msg, detail }
+function detectRedFlags(data, months, groupFn, costFn, hrFn) {
+  const groups = [...new Set(data.map(groupFn).filter(g => g && g !== 'NA' && g !== 'N/A'))];
+  const flags = [];
+
+  groups.forEach(g => {
+    const monthly = months.map(m => {
+      const rows = data.filter(r => r.ym === m && groupFn(r) === g);
+      const cost = rows.reduce((s, r) => s + costFn(r), 0);
+      const hr   = rows.reduce((s, r) => s + hrFn(r),   0);
+      return { m, cost, cph: hr > 0 ? cost / hr : null };
+    });
+
+    // Count trailing consecutive cost increases
+    let consec = 0;
+    for (let i = monthly.length - 1; i >= 1; i--) {
+      if (monthly[i].cost > 0 && monthly[i-1].cost > 0 && monthly[i].cost > monthly[i-1].cost) consec++;
+      else break;
+    }
+
+    // MoM % last month
+    const last = monthly[monthly.length - 1];
+    const prev = monthly[monthly.length - 2];
+    const momCost = prev && prev.cost > 0 ? (last.cost - prev.cost) / prev.cost * 100 : null;
+    const momCPH  = last.cph && prev && prev.cph > 0 ? (last.cph - prev.cph) / prev.cph * 100 : null;
+
+    // CPH vs overall average
+    const allCPH = monthly.filter(d => d.cph !== null).map(d => d.cph);
+    const avgCPH = allCPH.length ? allCPH.reduce((a,b)=>a+b,0)/allCPH.length : null;
+
+    if (consec >= 3) {
+      flags.push({ group: g, severity: 'critical',
+        msg: `${consec}-month rising cost streak`,
+        detail: `<strong>${g}</strong> costs have risen for <strong>${consec} consecutive months</strong>. Latest MoM: ${momCost !== null ? (momCost>=0?'+':'')+momCost.toFixed(1)+'%' : 'N/A'}` });
+    } else if (consec === 2) {
+      flags.push({ group: g, severity: 'warning',
+        msg: `2-month rising cost streak`,
+        detail: `<strong>${g}</strong> costs have increased for 2 months in a row — monitor closely.` });
+    }
+    if (momCost !== null && momCost > 30) {
+      flags.push({ group: g, severity: 'critical',
+        msg: `${momCost.toFixed(0)}% MoM cost spike`,
+        detail: `<strong>${g}</strong> spend jumped <strong>+${momCost.toFixed(1)}%</strong> in the latest month.` });
+    } else if (momCost !== null && momCost > 15) {
+      flags.push({ group: g, severity: 'warning',
+        msg: `${momCost.toFixed(0)}% MoM cost increase`,
+        detail: `<strong>${g}</strong> spend rose <strong>+${momCost.toFixed(1)}%</strong> month-on-month.` });
+    }
+    if (momCPH !== null && momCPH > 20) {
+      flags.push({ group: g, severity: 'watch',
+        msg: `CPH rising ${momCPH.toFixed(0)}% MoM`,
+        detail: `<strong>${g}</strong> cost-per-hour increased <strong>+${momCPH.toFixed(1)}%</strong> last month. Current: $${last.cph.toFixed(0)}` });
+    }
+  });
+
+  // De-dup (keep highest severity per group+type combo)
+  return flags.slice(0, 8);
+}
+
+function renderRedFlags(flags, containerId) {
+  const el = document.getElementById(containerId);
+  if (!flags.length) {
+    el.innerHTML = '<span class="rf-none">✅ No red flags detected in current filter</span>'; return;
+  }
+  const icon = { critical: '🔴', warning: '⚠️', watch: '🔵' };
+  el.innerHTML = '<div class="rf-header">🚨 FLAGS TO WATCH</div><div class="rf-cards">' +
+    flags.map(f => `
+      <div class="rf-card ${f.severity}">
+        <div class="rf-icon">${icon[f.severity]}</div>
+        <div><div class="rf-title">${f.msg}</div><div class="rf-body">${f.detail}</div></div>
+      </div>`).join('') +
+    '</div>';
+}
+
+// ─── REUSABLE DIMENSION BLOCK ─────────────────────────────────────────────────
+// cfg: { groupFn, costFn, hrFn, tableId, chartId, palette, label }
+function renderDimensionBlock(data, months, cfg) {
+  const { groupFn, costFn, hrFn, tableId, chartId, palette, label } = cfg;
+
+  destroyChart(chartId);
+
+  // Build group stats
+  const groups = [...new Set(data.map(groupFn).filter(g => g && g !== '' && g !== 'NA' && g !== 'N/A'))].sort();
+  const totalCost = data.reduce((s,r) => s + costFn(r), 0);
+
+  const stats = groups.map((g, idx) => {
+    const rows = data.filter(r => groupFn(r) === g);
+    const cost = rows.reduce((s,r) => s + costFn(r), 0);
+    const hrs  = rows.reduce((s,r) => s + hrFn(r), 0);
+    const cph  = hrs > 0 ? cost / hrs : 0;
+    const sharePct = totalCost > 0 ? cost / totalCost * 100 : 0;
+
+    // Per-month for MoM
+    const monthlyCost = months.map(m =>
+      data.filter(r => r.ym === m && groupFn(r) === g).reduce((s,r) => s + costFn(r), 0));
+    const monthlyCPH = months.map((m, i) => {
+      const hr = data.filter(r => r.ym === m && groupFn(r) === g).reduce((s,r) => s + hrFn(r), 0);
+      return hr > 0 ? monthlyCost[i] / hr : null;
+    });
+
+    const last = monthlyCost.length;
+    const momCost = last >= 2 && monthlyCost[last-2] > 0
+      ? (monthlyCost[last-1] - monthlyCost[last-2]) / monthlyCost[last-2] * 100 : null;
+    const prevCPH = monthlyCPH.filter(v => v !== null).slice(-2);
+    const momCPH  = prevCPH.length === 2 && prevCPH[0] > 0
+      ? (prevCPH[1] - prevCPH[0]) / prevCPH[0] * 100 : null;
+
+    // Consecutive increase count (trailing)
+    let consec = 0;
+    for (let i = monthlyCost.length - 1; i >= 1; i--) {
+      if (monthlyCost[i] > 0 && monthlyCost[i-1] > 0 && monthlyCost[i] > monthlyCost[i-1]) consec++;
+      else break;
+    }
+
+    return { g, cost, hrs, cph, sharePct, momCost, momCPH, consec, monthlyCost, monthlyCPH };
+  }).filter(s => s.cost > 0).sort((a,b) => b.cost - a.cost);
+
+  // ── TABLE ──
+  const pctFmt = v => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+  const pctColor = v => v == null ? 'var(--muted)' : v > 15 ? '#ef4444' : v > 5 ? '#f59e0b' : v < -5 ? '#10b981' : 'var(--muted)';
+  const consecBadge = n => {
+    const cls = n >= 3 ? 'consec-3' : n === 2 ? 'consec-2' : n === 1 ? 'consec-1' : 'consec-0';
+    const lbl = n === 0 ? '✓ stable' : `↑ ${n} month${n>1?'s':''}`;
+    return `<span class="consec-badge ${cls}">${lbl}</span>`;
+  };
+
+  let html = `<table class="insight-table">
+    <thead><tr>
+      <th>${label}</th>
+      <th class="right">Total Cost</th>
+      <th>Share</th>
+      <th class="right">Avg CPH</th>
+      <th class="right">MoM Cost</th>
+      <th class="right">MoM CPH</th>
+      <th class="right">Consec. ↑</th>
+    </tr></thead><tbody>`;
+
+  stats.forEach((s, i) => {
+    const color = palette[i % palette.length];
+    html += `<tr>
+      <td><span class="type-pill" style="background:${color}22;color:${color}">${s.g || '—'}</span></td>
+      <td class="right" style="font-weight:700">${cFmt(s.cost)}</td>
+      <td>
+        <div class="bar-cell">
+          <div class="mini-bar-outer"><div class="mini-bar-inner" style="width:${s.sharePct}%;background:${color}"></div></div>
+          <span style="color:var(--muted);min-width:36px">${s.sharePct.toFixed(1)}%</span>
+        </div>
+      </td>
+      <td class="right">$${s.cph.toFixed(0)}</td>
+      <td class="right" style="color:${pctColor(s.momCost)};font-weight:700">${pctFmt(s.momCost)}</td>
+      <td class="right" style="color:${pctColor(s.momCPH)}">${pctFmt(s.momCPH)}</td>
+      <td class="right">${consecBadge(s.consec)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById(tableId).innerHTML = html;
+
+  // ── TREND CHART (multi-line) ──
+  const datasets = stats.map((s, i) => ({
+    label: s.g,
+    data: s.monthlyCost,
+    borderColor: palette[i % palette.length],
+    backgroundColor: 'transparent',
+    tension: 0.3, pointRadius: 3, spanGaps: true
+  }));
+
+  charts[chartId] = new Chart(document.getElementById(chartId), {
+    type: 'line',
+    data: { labels: months.map(fmt), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { ...commonLegend, position: 'bottom' },
+        tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${cFmt(ctx.raw)}` } }
+      },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 } } },
+        y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 11 }, callback: v => cFmt(v) } }
+      }
+    }
+  });
+}
+
+// ─── DIMENSION CONFIGS ────────────────────────────────────────────────────────
+const DIM_CONFIGS = (prefix, palette1, palette2, palette3) => ([
+  {
+    key: 'editorial',
+    label: 'Editorial Type',
+    groupFn: r => r.showType || 'Unknown',
+    costFn:  r => r.editCost,
+    hrFn:    r => r.prodHr,
+    tableId: `${prefix}-editorial-table`,
+    chartId: `${prefix}-editorial-chart`,
+    palette: palette1
+  },
+  {
+    key: 'voa',
+    label: 'VOA Type',
+    groupFn: r => r.voaType || 'Unknown',
+    costFn:  r => r.voaCost,
+    hrFn:    r => r.prodHr,
+    tableId: `${prefix}-voa-table`,
+    chartId: `${prefix}-voa-chart`,
+    palette: palette2
+  },
+  {
+    key: 'post',
+    label: 'Sound Type',
+    groupFn: r => r.soundType || 'Unknown',
+    costFn:  r => r.postCost,
+    hrFn:    r => r.finalMastHr,
+    tableId: `${prefix}-post-table`,
+    chartId: `${prefix}-post-chart`,
+    palette: palette3
+  }
+]);
+
+const OV_PALETTE_ED  = [COLORS.blue, COLORS.purple, COLORS.green, COLORS.amber, COLORS.teal, COLORS.pink, COLORS.sky, COLORS.orange];
+const OV_PALETTE_VOA = [COLORS.green, COLORS.teal];
+const OV_PALETTE_POST= [COLORS.amber, COLORS.blue, COLORS.red];
+
+// ─── RENDER OVERALL PRODUCTION INSIGHTS ──────────────────────────────────────
+function renderOverallInsights(data, months) {
+  const dims = DIM_CONFIGS('ov', OV_PALETTE_ED, OV_PALETTE_VOA, OV_PALETTE_POST);
+
+  // Collect all flags across dims
+  const allFlags = dims.flatMap(d => detectRedFlags(data, months, d.groupFn, d.costFn, d.hrFn));
+  renderRedFlags(allFlags, 'red-flags-overall');
+
+  dims.forEach(d => renderDimensionBlock(data, months, d));
+}
+
+// ─── GENRE MoM SPEND ─────────────────────────────────────────────────────────
+let _currentGenreView = 'dims';
+
+function setGenreView(view) {
+  _currentGenreView = view;
+  document.getElementById('genre-view-dims').style.display = view === 'dims' ? '' : 'none';
+  document.getElementById('genre-view-mom').style.display  = view === 'mom'  ? '' : 'none';
+  document.getElementById('gview-dims').classList.toggle('active', view === 'dims');
+  document.getElementById('gview-mom').classList.toggle('active',  view === 'mom');
+  if (view === 'mom') {
+    const data   = getFilteredData();
+    const months = [...new Set(data.map(r => r.ym))].sort();
+    renderGenreMoMSpend(data, months);
+  }
+}
+
+function _linReg(vals) {
+  const n = vals.length;
+  if (n < 2) return vals.slice();
+  const clean = vals.map(v => v || 0);
+  const sx = n*(n-1)/2, sx2 = n*(n-1)*(2*n-1)/6;
+  const sy  = clean.reduce((a,b)=>a+b, 0);
+  const sxy = clean.reduce((s,v,i)=>s+i*v, 0);
+  const slope = (n*sxy - sx*sy) / (n*sx2 - sx*sx);
+  const intercept = (sy - slope*sx) / n;
+  return clean.map((_, i) => slope*i + intercept);
+}
+
+function _momTable(months, values, color) {
+  if (!months.length) return '<div style="color:var(--muted);font-size:0.75rem;padding:8px">No data</div>';
+  const rows = months.map((m, i) => {
+    const v = values[i] || 0;
+    const prev = i > 0 ? (values[i-1]||0) : null;
+    let momHtml = '<span style="color:var(--muted)">—</span>';
+    if (prev !== null && prev > 0) {
+      const pct = ((v - prev) / prev * 100).toFixed(1);
+      const up = v >= prev;
+      const col = up ? '#f59e0b' : '#10b981';
+      momHtml = `<span style="color:${col};font-weight:700">${up?'▲':'▼'} ${Math.abs(pct)}%</span>`;
+    }
+    return `<tr>
+      <td style="font-size:0.75rem">${fmt(m)}</td>
+      <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">${cFmt(v)}</td>
+      <td style="text-align:right">${momHtml}</td>
+    </tr>`;
+  }).join('');
+  return `<table style="width:100%;border-collapse:collapse;font-size:0.76rem">
+    <thead><tr>
+      <th style="color:var(--muted);font-size:0.66rem;text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--border)">Month</th>
+      <th style="color:${color};font-size:0.66rem;text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--border);text-align:right">Spend</th>
+      <th style="color:var(--muted);font-size:0.66rem;text-transform:uppercase;padding:4px 0;border-bottom:1px solid var(--border);text-align:right">MoM</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function renderGenreMoMSpend(data, months) {
+  if (!currentGenre) return;
+  destroyChart('genre-mom-chart');
+
+  const gData = data.filter(r => r.category === currentGenre);
+  const editVals = months.map(m => gData.filter(r=>r.ym===m).reduce((s,r)=>s+r.editCost,0));
+  const prodVals = months.map(m => gData.filter(r=>r.ym===m).reduce((s,r)=>s+r.voaCost,0));
+  const postVals = months.map(m => gData.filter(r=>r.ym===m).reduce((s,r)=>s+r.postCost,0));
+
+  const labels = months.map(fmt);
+  const C_EDIT = '#8b5cf6', C_PROD = '#10b981', C_POST = '#f59e0b';
+
+  document.getElementById('genre-mom-title').textContent = `MoM Spend — ${currentGenre}`;
+
+  // Summary insight
+  if (months.length >= 2) {
+    const last = months.length - 1;
+    const calcMoM = (arr) => arr[last-1] > 0 ? ((arr[last]-arr[last-1])/arr[last-1]*100).toFixed(1) : null;
+    const eM = calcMoM(editVals), pM = calcMoM(prodVals), oM = calcMoM(postVals);
+    const arrow = v => v == null ? '—' : (v >= 0 ? `▲ ${Math.abs(v)}%` : `▼ ${Math.abs(v)}%`);
+    const col   = v => v == null ? 'var(--muted)' : (v > 0 ? '#f59e0b' : '#10b981');
+    document.getElementById('genre-mom-summary').innerHTML =
+      `<span style="color:${C_EDIT}">■</span> Edit <strong style="color:${col(eM)}">${arrow(eM)}</strong>&nbsp;&nbsp;` +
+      `<span style="color:${C_PROD}">■</span> Prod <strong style="color:${col(pM)}">${arrow(pM)}</strong>&nbsp;&nbsp;` +
+      `<span style="color:${C_POST}">■</span> Post <strong style="color:${col(oM)}">${arrow(oM)}</strong>`;
+  }
+
+  const ctx = document.getElementById('genre-mom-chart').getContext('2d');
+  charts['genre-mom-chart'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        // Actual lines
+        { label:'Editorial',   data: editVals, borderColor: C_EDIT, backgroundColor: C_EDIT+'22',
+          borderWidth:2.5, pointRadius:4, pointHoverRadius:6, tension:0.3, fill:false },
+        { label:'Production',  data: prodVals, borderColor: C_PROD, backgroundColor: C_PROD+'22',
+          borderWidth:2.5, pointRadius:4, pointHoverRadius:6, tension:0.3, fill:false },
+        { label:'Post Prod',   data: postVals, borderColor: C_POST, backgroundColor: C_POST+'22',
+          borderWidth:2.5, pointRadius:4, pointHoverRadius:6, tension:0.3, fill:false },
+        // Trendlines (dashed)
+        { label:'Editorial trend',  data: _linReg(editVals), borderColor: C_EDIT, borderWidth:1.5,
+          borderDash:[6,4], pointRadius:0, tension:0, fill:false },
+        { label:'Production trend', data: _linReg(prodVals), borderColor: C_PROD, borderWidth:1.5,
+          borderDash:[6,4], pointRadius:0, tension:0, fill:false },
+        { label:'Post Prod trend',  data: _linReg(postVals), borderColor: C_POST, borderWidth:1.5,
+          borderDash:[6,4], pointRadius:0, tension:0, fill:false },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: {
+          labels: { color:'#94a3b8', font:{size:11}, padding:16,
+            filter: item => !item.label.includes('trend') }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              if (ctx.dataset.label.includes('trend')) return null;
+              return ` ${ctx.dataset.label}: ${cFmt(ctx.parsed.y)}`;
+            }
+          },
+          filter: item => !item.dataset.label.includes('trend')
+        }
+      },
+      scales: {
+        x: { ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+        y: { ticks:{ color:'#94a3b8', font:{size:11},
+              callback: v => '$' + (v>=1000 ? (v/1000).toFixed(0)+'k' : v) },
+             grid:{ color:'#334155' } }
+      }
+    }
+  });
+
+  // MoM tables
+  document.getElementById('genre-mom-edit-table').innerHTML = _momTable(months, editVals, C_EDIT);
+  document.getElementById('genre-mom-prod-table').innerHTML = _momTable(months, prodVals, C_PROD);
+  document.getElementById('genre-mom-post-table').innerHTML = _momTable(months, postVals, C_POST);
+}
+
+// ─── GENRE TAB LOGIC ─────────────────────────────────────────────────────────
+function buildGenreTabs(data) {
+  const genres = [...new Set(data.map(r => r.category).filter(g => g && g.toLowerCase() !== 'solo leveling'))].sort();
+  if (!currentGenre || !genres.includes(currentGenre)) currentGenre = genres[0] || '';
+  const container = document.getElementById('genre-tabs');
+  container.innerHTML = genres.map(g =>
+    `<button id="gtab-${g.replace(/\s/g,'-')}" class="genre-tab${g===currentGenre?' active':''}" onclick="setGenreTab('${g}')">${g}</button>`
+  ).join('');
+}
+
+function setGenreTab(genre) {
+  currentGenre = genre;
+  document.querySelectorAll('.genre-tab').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('gtab-' + genre.replace(/\s/g,'-'));
+  if (btn) btn.classList.add('active');
+  const data = getFilteredData();
+  const months = [...new Set(data.map(r => r.ym))].sort().filter(m => m !== '202603');
+  renderGenreInsights(data, months);
+  // Refresh MoM view if currently active
+  if (_currentGenreView === 'mom') renderGenreMoMSpend(data, months);
+}
+
+// ─── RENDER GENRE-LEVEL INSIGHTS ─────────────────────────────────────────────
+function renderGenreInsights(data, months) {
+  if (!currentGenre) return;
+  const gData = data.filter(r => r.category === currentGenre);
+  const dims = DIM_CONFIGS('g', OV_PALETTE_ED, OV_PALETTE_VOA, OV_PALETTE_POST);
+
+  const allFlags = dims.flatMap(d => detectRedFlags(gData, months, d.groupFn, d.costFn, d.hrFn));
+  renderRedFlags(allFlags, 'red-flags-genre');
+
+  dims.forEach(d => renderDimensionBlock(gData, months, d));
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ─── CHART 8: Writing Type Mix ────────────────────────────────────────────────
+function renderWritingType(data, months) {
+  destroyChart('writing-type');
+  const types = ['AI', 'ER', 'PGC India', 'PGC US'];
+  const wColors = [COLORS.purple, COLORS.green, COLORS.amber, COLORS.blue];
+
+  const datasets = types.map((t, i) => ({
+    label: t,
+    data: months.map(m => data.filter(r=>r.ym===m && r.writingType===t).reduce((s,r)=>s+r.totalCost,0)),
+    backgroundColor: wColors[i] + 'cc'
+  }));
+
+  // Insight: AI vs PGC trend
+  const aiVals = datasets[0].data;
+  const pgcVals = datasets[3].data;
+  const lastAI = aiVals[aiVals.length-1] || 0;
+  const lastPGC = pgcVals[pgcVals.length-1] || 0;
+  document.getElementById('insight-writing').innerHTML =
+    `Latest month: AI <strong>${cFmt(lastAI)}</strong> · PGC US <strong>${cFmt(lastPGC)}</strong>`;
+
+  charts['writing-type'] = new Chart(document.getElementById('chart-writing-type'), {
+    type: 'bar',
+    data: { labels: months.map(fmt), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: commonLegend, tooltip: { ...commonTooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${cFmt(ctx.raw)}` } } },
+      scales: commonScales(true)
+    }
+  });
+}
+</script>
+</body>
+</html>
