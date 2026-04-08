@@ -643,21 +643,44 @@ function setMainTab(tab) {
 }
 
 function renderMoMDashboard(data, months) {
-  // Destroy any previous charts in this section
   ['mom-edit','mom-prod','mom-post','mom-launch'].forEach(id => destroyChart(id));
 
   const tab = _mainTab;
   const d = tab === 'overall' ? data : data.filter(r => r.category === tab);
   const isOverall = tab === 'overall';
   const groupFn = r => isOverall ? (r.category || 'Unknown') : (r.aiPgc || 'Unknown');
-  const groups = [...new Set(d.map(groupFn))].filter(g => g && g !== 'Unknown').sort();
   const GENRE_COLORS = { Fantasy: '#3b82f6', Romance: '#ec4899' };
   const gColor = g => isOverall ? (GENRE_COLORS[g] || typeColor(g)) : typeColor(g);
 
+  // ── SINGLE-PASS PRE-AGGREGATION O(n) ────────────────────────────────
+  const agg = {}; // { ym: { group: { editCost, voaCost, postCost, prodHr, fmHr, launches:Set } } }
+  d.forEach(r => {
+    const g = groupFn(r);
+    if (!g || g === 'Unknown') return;
+    if (!agg[r.ym]) agg[r.ym] = {};
+    if (!agg[r.ym][g]) agg[r.ym][g] = { editCost:0, voaCost:0, postCost:0, prodHr:0, fmHr:0, launches:new Set() };
+    const a = agg[r.ym][g];
+    a.editCost += r.editCost;
+    a.voaCost  += r.voaCost;
+    a.postCost += r.postCost;
+    a.prodHr   += r.prodHr;
+    a.fmHr     += r.finalMastHr;
+    if (r.newLaunch && r.title && r.title !== 'unallocated') a.launches.add(r.title);
+  });
+
+  const groups = [...new Set(Object.values(agg).flatMap(mo => Object.keys(mo)))].filter(Boolean).sort();
+  const aggVal = (mo, g, key) => {
+    const cell = agg[mo] && agg[mo][g];
+    if (!cell) return 0;
+    const v = cell[key];
+    return v instanceof Set ? v.size : (v || 0);
+  };
+  // ────────────────────────────────────────────────────────────────────
+
   const METRICS = [
-    { id:'mom-edit', title:'Editorial Cost',       costFn: r=>r.editCost, hrsFn: r=>r.prodHr,      hrsLabel:'Prod Hrs', color:'#8b5cf6' },
-    { id:'mom-prod', title:'Production Cost',      costFn: r=>r.voaCost,  hrsFn: r=>r.prodHr,      hrsLabel:'Prod Hrs', color:'#10b981' },
-    { id:'mom-post', title:'Post Production Cost', costFn: r=>r.postCost, hrsFn: r=>r.finalMastHr, hrsLabel:'FM Hrs',   color:'#f59e0b' },
+    { id:'mom-edit', title:'Editorial Cost',       key:'editCost', hrsKey:'prodHr',  hrsLabel:'Prod Hrs', color:'#8b5cf6' },
+    { id:'mom-prod', title:'Production Cost',      key:'voaCost',  hrsKey:'prodHr',  hrsLabel:'Prod Hrs', color:'#10b981' },
+    { id:'mom-post', title:'Post Production Cost', key:'postCost', hrsKey:'fmHr',    hrsLabel:'FM Hrs',   color:'#f59e0b' },
   ];
 
   // Build HTML skeleton
@@ -689,21 +712,21 @@ function renderMoMDashboard(data, months) {
       </div>
     </div>`;
 
-  // Render each cost metric
+  // Render each cost metric using pre-aggregated lookups
   METRICS.forEach(m => {
-    const byGroup = {};
+    const byGroup  = {};
     const hrsByGroup = {};
     groups.forEach(g => {
-      byGroup[g]    = months.map(mo => d.filter(r=>r.ym===mo&&groupFn(r)===g).reduce((s,r)=>s+m.costFn(r),0));
-      hrsByGroup[g] = months.map(mo => d.filter(r=>r.ym===mo&&groupFn(r)===g).reduce((s,r)=>s+m.hrsFn(r),0));
+      byGroup[g]   = months.map(mo => aggVal(mo, g, m.key));
+      hrsByGroup[g] = months.map(mo => aggVal(mo, g, m.hrsKey));
     });
-    const totals   = months.map(mo => d.filter(r=>r.ym===mo).reduce((s,r)=>s+m.costFn(r),0));
+    const totals = months.map(mo => groups.reduce((s, g) => s + aggVal(mo, g, m.key), 0));
 
     // Summary badge
     if (months.length >= 2) {
-      const last = totals.length-1;
-      const prev = totals[last-1]||0;
-      const curr = totals[last]||0;
+      const last = totals.length - 1;
+      const prev = totals[last-1] || 0;
+      const curr = totals[last]   || 0;
       if (prev > 0) {
         const pct = ((curr-prev)/prev*100).toFixed(1);
         const up = curr >= prev;
@@ -712,7 +735,7 @@ function renderMoMDashboard(data, months) {
       }
     }
 
-    // Chart datasets: one line per group + trendline per group
+    // Chart datasets: one line per group + trendline
     const datasets = [];
     groups.forEach(g => {
       const color = gColor(g);
@@ -746,31 +769,24 @@ function renderMoMDashboard(data, months) {
     // Hours + cost table
     const hdrCols = groups.map(g=>`<th style="color:${gColor(g)}">${g}</th><th>${m.hrsLabel}</th>`).join('') + '<th>Total</th><th>MoM%</th>';
     const bodyRows = months.map((mo,i) => {
-      const prev = i>0 ? totals[i-1] : null;
-      const mom = prev && prev>0 ? ((totals[i]-prev)/prev*100).toFixed(1) : null;
-      const momHtml = mom==null ? '—' : `<span style="color:${parseFloat(mom)>0?'#f59e0b':'#10b981'};font-weight:700">${parseFloat(mom)>0?'▲':'▼'}${Math.abs(mom)}%</span>`;
+      const prev = i > 0 ? totals[i-1] : null;
+      const mom = prev && prev > 0 ? ((totals[i]-prev)/prev*100).toFixed(1) : null;
+      const momHtml = mom == null ? '—' : `<span style="color:${parseFloat(mom)>0?'#f59e0b':'#10b981'};font-weight:700">${parseFloat(mom)>0?'▲':'▼'}${Math.abs(mom)}%</span>`;
       const groupCols = groups.map(g=>`<td>${cFmt(byGroup[g][i])}</td><td>${(hrsByGroup[g][i]||0).toFixed(1)}</td>`).join('');
       return `<tr><td>${fmt(mo)}</td>${groupCols}<td><strong>${cFmt(totals[i])}</strong></td><td>${momHtml}</td></tr>`;
     }).join('');
 
-    document.getElementById(m.id+'-table').innerHTML = `
-      <table><thead><tr><th>Month</th>${hdrCols}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+    document.getElementById(m.id+'-table').innerHTML =
+      `<table><thead><tr><th>Month</th>${hdrCols}</tr></thead><tbody>${bodyRows}</tbody></table>`;
   });
 
-  // New Launches chart
+  // New Launches — already pre-aggregated as Set sizes
   const launchByGroup = {};
-  groups.forEach(g => {
-    launchByGroup[g] = months.map(mo => {
-      const seen = new Set();
-      d.filter(r=>r.ym===mo&&r.newLaunch&&r.title&&r.title!=='unallocated'&&groupFn(r)===g)
-       .forEach(r=>seen.add(r.title));
-      return seen.size;
-    });
-  });
-  const totalLaunches = months.map((_,i) => groups.reduce((s,g)=>s+(launchByGroup[g][i]||0),0));
+  groups.forEach(g => { launchByGroup[g] = months.map(mo => aggVal(mo, g, 'launches')); });
+  const totalLaunches = months.map(mo => groups.reduce((s, g) => s + aggVal(mo, g, 'launches'), 0));
 
-  if (months.length>=2) {
-    const last = totalLaunches.length-1;
+  if (months.length >= 2) {
+    const last = totalLaunches.length - 1;
     document.getElementById('mom-launch-summary').innerHTML =
       `<span style="color:var(--teal);font-weight:700">${totalLaunches[last]} launches in ${fmt(months[last])}</span>`;
   }
