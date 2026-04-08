@@ -1,0 +1,27 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Deploy to Vercel (Production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }} --scope=pocket-fm
+
+      - name: Deploy Preview (Pull Request)
+        if: github.event_name == 'pull_request'
+        run: vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }} --scope=pocket-fm
