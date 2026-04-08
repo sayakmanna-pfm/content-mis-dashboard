@@ -426,13 +426,70 @@ function typeColor(t) {
 const SHEET_ID  = '1BdZ-izEgRkWcBiaCTSxnXXxxkS0nyhFB-yOmRE-3zuY';
 const SHEET_GID = '0';
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+const CACHE_KEY = 'contentMIS_csv_v1';
+const CACHE_TTL = 45 * 60 * 1000; // 45 minutes
 
 function setProgress(pct, label) {
   document.getElementById('progress-bar').style.width = pct + '%';
   document.getElementById('progress-label').textContent = label;
 }
 
-function loadFromGoogleSheets() {
+// Parse CSV text and render dashboard immediately (no setTimeout delays)
+function parseCsvAndRender(csvText, showLoadingFirst) {
+  if (showLoadingFirst) {
+    setProgress(85, 'Building dashboard…');
+    document.getElementById('gs-status').textContent = 'Building dashboard…';
+  }
+  Papa.parse(csvText, {
+    skipEmptyLines: true,
+    complete: function(results) {
+      Object.values(charts).forEach(c => c.destroy());
+      charts = {}; rawData = []; allMonths = [];
+      processCSV(results.data);
+      if (showLoadingFirst) {
+        setProgress(100, 'Done!');
+        document.getElementById('upload-screen').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+      }
+    },
+    error: function(err) { if (showLoadingFirst) showSheetError('Parse error: ' + err.message); }
+  });
+}
+
+// Save CSV to localStorage cache
+function cacheCSV(csv) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), csv })); } catch(e) {}
+}
+
+// Silently fetch fresh data in background after loading from cache
+function fetchSheetInBackground() {
+  fetch(SHEET_CSV_URL)
+    .then(r => r.ok ? r.text() : null)
+    .then(csv => {
+      if (!csv) return;
+      cacheCSV(csv);
+      parseCsvAndRender(csv, false); // re-render silently
+    })
+    .catch(() => {}); // fail silently — cached data already shown
+}
+
+function loadFromGoogleSheets(skipCache) {
+  // Try serving from cache first for instant load
+  if (!skipCache) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY));
+      if (cached && cached.csv && (Date.now() - cached.ts) < CACHE_TTL) {
+        // Instant render from cache
+        document.getElementById('gs-status').textContent = 'Loading from cache…';
+        setProgress(80, 'Loading from cache…');
+        parseCsvAndRender(cached.csv, true);
+        fetchSheetInBackground(); // refresh in background
+        return;
+      }
+    } catch(e) {}
+  }
+
+  // No cache or force-refresh — show loading screen and fetch
   document.getElementById('upload-screen').style.display = 'flex';
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('gs-status').textContent = 'Connecting to Google Sheets…';
@@ -444,31 +501,13 @@ function loadFromGoogleSheets() {
   fetch(SHEET_CSV_URL)
     .then(res => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setProgress(45, 'Downloading data…');
+      setProgress(55, 'Downloading data…');
       document.getElementById('gs-status').textContent = 'Downloading data…';
       return res.text();
     })
     .then(csvText => {
-      setProgress(70, 'Parsing…');
-      document.getElementById('gs-status').textContent = 'Parsing data…';
-      Papa.parse(csvText, {
-        skipEmptyLines: false,
-        complete: function(results) {
-          setProgress(90, 'Building dashboard…');
-          setTimeout(() => {
-            // Destroy any existing charts
-            Object.values(charts).forEach(c => c.destroy());
-            charts = {}; rawData = []; allMonths = [];
-            processCSV(results.data);
-            setProgress(100, 'Done!');
-            setTimeout(() => {
-              document.getElementById('upload-screen').style.display = 'none';
-              document.getElementById('dashboard').style.display = 'block';
-            }, 250);
-          }, 50);
-        },
-        error: function(err) { showSheetError('Parse error: ' + err.message); }
-      });
+      cacheCSV(csvText);
+      parseCsvAndRender(csvText, true);
     })
     .catch(err => showSheetError('Could not fetch sheet. Ensure it is shared publicly. Error: ' + err.message));
 }
@@ -483,16 +522,14 @@ function showSheetError(msg) {
 }
 
 function refreshFromSheets() {
+  try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
   Object.values(charts).forEach(c => c.destroy());
   charts = {}; rawData = []; allMonths = [];
-  // Reset analytics month dropdown so it repopulates with fresh data
-  const amSel = document.getElementById('analytics-month');
-  if (amSel) amSel.innerHTML = '';
-  loadFromGoogleSheets();
+  loadFromGoogleSheets(true);
 }
 
 // Auto-load on page ready
-document.addEventListener('DOMContentLoaded', loadFromGoogleSheets);
+document.addEventListener('DOMContentLoaded', () => loadFromGoogleSheets(false));
 
 // ─── CSV PROCESSING ──────────────────────────────────────────────────────────
 function processCSV(rows) {
