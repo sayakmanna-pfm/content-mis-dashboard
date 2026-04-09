@@ -690,34 +690,6 @@ function renderMoMDashboard(data, months) {
   const tab = _mainTab;
   const d = tab === 'overall' ? data : data.filter(r => r.category === tab);
   const isOverall = tab === 'overall';
-  const groupFn = r => isOverall ? (r.category || 'Unknown') : (r.aiPgc || 'Unknown');
-  const GENRE_COLORS = { Fantasy: '#3b82f6', Romance: '#ec4899' };
-  const gColor = g => isOverall ? (GENRE_COLORS[g] || typeColor(g)) : typeColor(g);
-
-  // ── SINGLE-PASS PRE-AGGREGATION O(n) ────────────────────────────────
-  const agg = {}; // { ym: { group: { editCost, voaCost, postCost, prodHr, fmHr, launches:Set } } }
-  d.forEach(r => {
-    const g = groupFn(r);
-    if (!g || g === 'Unknown') return;
-    if (!agg[r.ym]) agg[r.ym] = {};
-    if (!agg[r.ym][g]) agg[r.ym][g] = { editCost:0, voaCost:0, postCost:0, prodHr:0, fmHr:0, launches:new Set() };
-    const a = agg[r.ym][g];
-    a.editCost += r.editCost;
-    a.voaCost  += r.voaCost;
-    a.postCost += r.postCost;
-    a.prodHr   += r.prodHr;
-    a.fmHr     += r.finalMastHr;
-    if (r.newLaunch && r.title && r.title !== 'unallocated') a.launches.add(r.title);
-  });
-
-  const groups = [...new Set(Object.values(agg).flatMap(mo => Object.keys(mo)))].filter(Boolean).sort();
-  const aggVal = (mo, g, key) => {
-    const cell = agg[mo] && agg[mo][g];
-    if (!cell) return 0;
-    const v = cell[key];
-    return v instanceof Set ? v.size : (v || 0);
-  };
-  // ────────────────────────────────────────────────────────────────────
 
   const METRICS = [
     { id:'mom-edit', title:'Editorial Cost',       key:'editCost', hrsKey:'prodHr',  hrsLabel:'Prod Hrs', color:'#8b5cf6' },
@@ -725,150 +697,291 @@ function renderMoMDashboard(data, months) {
     { id:'mom-post', title:'Post Production Cost', key:'postCost', hrsKey:'fmHr',    hrsLabel:'FM Hrs',   color:'#f59e0b' },
   ];
 
-  // Build HTML skeleton
-  document.getElementById('mom-content').innerHTML = `
-    <div class="mom-grid">
-      ${METRICS.map(m => `
+  if (isOverall) {
+    // ── OVERALL TAB: total-only bar charts + KPI numbers ──────────────
+    // Single-pass aggregate — no grouping, just totals per month
+    const agg = {};
+    d.forEach(r => {
+      if (!agg[r.ym]) agg[r.ym] = { editCost:0, voaCost:0, postCost:0, prodHr:0, fmHr:0, launches:new Set() };
+      const a = agg[r.ym];
+      a.editCost += r.editCost; a.voaCost += r.voaCost; a.postCost += r.postCost;
+      a.prodHr += r.prodHr; a.fmHr += r.finalMastHr;
+      if (r.newLaunch && r.title && r.title !== 'unallocated') a.launches.add(r.title);
+    });
+    const totVal = (mo, key) => { const c = agg[mo]; if (!c) return 0; const v = c[key]; return v instanceof Set ? v.size : (v||0); };
+
+    const metricTotals = METRICS.map(m => months.map(mo => totVal(mo, m.key)));
+    const totalLaunches = months.map(mo => totVal(mo, 'launches'));
+    const grandTotals   = metricTotals.map(arr => arr.reduce((s,v)=>s+v,0));
+    const grandLaunches = totalLaunches.reduce((s,v)=>s+v,0);
+    const grandOverall  = grandTotals.reduce((s,v)=>s+v,0);
+
+    // Build HTML: KPI row + bar charts grid
+    document.getElementById('mom-content').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px">
+        <div class="mom-section" style="padding:16px;grid-column:span 1">
+          <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Overall Total Cost</div>
+          <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #f1f5f9;padding-left:10px">${cFmt(grandOverall)}</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${months.length} months</div>
+        </div>
+        ${METRICS.map((m,i) => `
+          <div class="mom-section" style="padding:16px">
+            <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">${m.title}</div>
+            <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid ${m.color};padding-left:10px">${cFmt(grandTotals[i])}</div>
+            <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${((grandTotals[i]/grandOverall)*100).toFixed(1)}% of total</div>
+          </div>
+        `).join('')}
+        <div class="mom-section" style="padding:16px">
+          <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">New Launches</div>
+          <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #14b8a6;padding-left:10px">${grandLaunches}</div>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">across ${months.length} months</div>
+        </div>
+      </div>
+      <div class="mom-grid">
+        ${METRICS.map(m => `
+          <div class="mom-section">
+            <div class="mom-section-hdr">
+              <div>
+                <div class="mom-section-title" style="border-left:3px solid ${m.color};padding-left:8px">${m.title}</div>
+                <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Monthly · Overall</div>
+              </div>
+              <div class="mom-section-sub" id="${m.id}-summary"></div>
+            </div>
+            <div class="mom-chart-body"><canvas id="${m.id}-chart"></canvas></div>
+            <div class="mom-hrs-table" id="${m.id}-table"></div>
+          </div>
+        `).join('')}
         <div class="mom-section">
           <div class="mom-section-hdr">
             <div>
-              <div class="mom-section-title" style="border-left:3px solid ${m.color};padding-left:8px">${m.title}</div>
-              <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">${isOverall?'By Genre':'By AI/PGC'} · MoM trend</div>
+              <div class="mom-section-title" style="border-left:3px solid #14b8a6;padding-left:8px">New Launches</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Monthly · Overall</div>
             </div>
-            <div class="mom-section-sub" id="${m.id}-summary"></div>
+            <div class="mom-section-sub" id="mom-launch-summary"></div>
           </div>
-          <div class="mom-chart-body"><canvas id="${m.id}-chart"></canvas></div>
-          <div class="mom-hrs-table" id="${m.id}-table"></div>
+          <div class="mom-chart-body"><canvas id="mom-launch-chart"></canvas></div>
+          <div class="mom-hrs-table" id="mom-launch-table"></div>
         </div>
-      `).join('')}
-      <div class="mom-section">
-        <div class="mom-section-hdr">
-          <div>
-            <div class="mom-section-title" style="border-left:3px solid #14b8a6;padding-left:8px">New Launches</div>
-            <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">${isOverall?'By Genre':'By AI/PGC'} · MoM count</div>
-          </div>
-          <div class="mom-section-sub" id="mom-launch-summary"></div>
-        </div>
-        <div class="mom-chart-body"><canvas id="mom-launch-chart"></canvas></div>
-        <div class="mom-hrs-table" id="mom-launch-table"></div>
-      </div>
-    </div>`;
+      </div>`;
 
-  // Render each cost metric using pre-aggregated lookups
-  METRICS.forEach(m => {
-    const byGroup  = {};
-    const hrsByGroup = {};
-    groups.forEach(g => {
-      byGroup[g]   = months.map(mo => aggVal(mo, g, m.key));
-      hrsByGroup[g] = months.map(mo => aggVal(mo, g, m.hrsKey));
-    });
-    const totals = months.map(mo => groups.reduce((s, g) => s + aggVal(mo, g, m.key), 0));
+    // Render bar charts
+    METRICS.forEach((m, mi) => {
+      const vals    = metricTotals[mi];
+      const hrsVals = months.map(mo => totVal(mo, m.hrsKey));
 
-    // Summary badge
-    if (months.length >= 2) {
-      const last = totals.length - 1;
-      const prev = totals[last-1] || 0;
-      const curr = totals[last]   || 0;
-      if (prev > 0) {
-        const pct = ((curr-prev)/prev*100).toFixed(1);
-        const up = curr >= prev;
-        document.getElementById(m.id+'-summary').innerHTML =
-          `<span style="color:${up?'#f59e0b':'#10b981'};font-weight:700">${up?'▲':'▼'} ${Math.abs(pct)}% MoM</span>`;
+      if (months.length >= 2) {
+        const last = vals.length - 1;
+        const prev = vals[last-1] || 0, curr = vals[last] || 0;
+        if (prev > 0) {
+          const pct = ((curr-prev)/prev*100).toFixed(1);
+          const up = curr >= prev;
+          document.getElementById(m.id+'-summary').innerHTML =
+            `<span style="color:${up?'#f59e0b':'#10b981'};font-weight:700">${up?'▲':'▼'} ${Math.abs(pct)}% MoM</span>`;
+        }
       }
+
+      const ctx = document.getElementById(m.id+'-chart').getContext('2d');
+      charts[m.id] = new Chart(ctx, {
+        type:'bar',
+        data:{ labels:months.map(fmt), datasets:[{ label:m.title, data:vals,
+          backgroundColor:m.color+'99', borderColor:m.color, borderWidth:1.5, borderRadius:4 }] },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          interaction:{ mode:'index', intersect:false },
+          plugins:{ legend:{ display:false },
+            tooltip:{ callbacks:{ label: c => ` ${cFmt(c.parsed.y)}` }} },
+          scales:{
+            x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+            y:{ ticks:{ color:'#94a3b8', font:{size:11},
+              callback: v => '$'+(v>=1000?(v/1000).toFixed(0)+'k':Math.round(v)) },
+              grid:{ color:'#334155' } }
+          }
+        }
+      });
+
+      const bodyRows = months.map((mo,i) => {
+        const prev = i > 0 ? vals[i-1] : null;
+        const mom = prev && prev > 0 ? ((vals[i]-prev)/prev*100).toFixed(1) : null;
+        const momHtml = mom == null ? '—' : `<span style="color:${parseFloat(mom)>0?'#f59e0b':'#10b981'};font-weight:700">${parseFloat(mom)>0?'▲':'▼'}${Math.abs(mom)}%</span>`;
+        return `<tr><td>${fmt(mo)}</td><td>${cFmt(vals[i])}</td><td>${(hrsVals[i]||0).toFixed(1)}</td><td>${momHtml}</td></tr>`;
+      }).join('');
+      document.getElementById(m.id+'-table').innerHTML =
+        `<table><thead><tr><th>Month</th><th>Cost</th><th>${m.hrsLabel}</th><th>MoM%</th></tr></thead><tbody>${bodyRows}</tbody></table>`;
+    });
+
+    // Launch bar chart
+    if (months.length >= 2) {
+      const last = totalLaunches.length - 1;
+      document.getElementById('mom-launch-summary').innerHTML =
+        `<span style="color:var(--teal);font-weight:700">${totalLaunches[last]} in ${fmt(months[last])}</span>`;
+    }
+    const lctx = document.getElementById('mom-launch-chart').getContext('2d');
+    charts['mom-launch'] = new Chart(lctx, {
+      type:'bar',
+      data:{ labels:months.map(fmt), datasets:[{ label:'New Launches', data:totalLaunches,
+        backgroundColor:'#14b8a699', borderColor:'#14b8a6', borderWidth:1.5, borderRadius:4 }] },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false },
+          tooltip:{ callbacks:{ label: c => ` ${c.parsed.y} launches` }} },
+        scales:{
+          x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+          y:{ ticks:{ color:'#94a3b8', font:{size:11}, stepSize:1 }, grid:{ color:'#334155' } }
+        }
+      }
+    });
+    const lBodyRows = months.map((mo,i) =>
+      `<tr><td>${fmt(mo)}</td><td><strong>${totalLaunches[i]}</strong></td></tr>`).join('');
+    document.getElementById('mom-launch-table').innerHTML =
+      `<table><thead><tr><th>Month</th><th>Launches</th></tr></thead><tbody>${lBodyRows}</tbody></table>`;
+
+  } else {
+    // ── GENRE TAB: line charts broken by AI/PGC, no trendlines ────────
+    const agg = {};
+    d.forEach(r => {
+      const g = (r.aiPgc || '').trim() || 'Unknown';
+      if (g === 'Unknown') return;
+      if (!agg[r.ym]) agg[r.ym] = {};
+      if (!agg[r.ym][g]) agg[r.ym][g] = { editCost:0, voaCost:0, postCost:0, prodHr:0, fmHr:0, launches:new Set() };
+      const a = agg[r.ym][g];
+      a.editCost += r.editCost; a.voaCost += r.voaCost; a.postCost += r.postCost;
+      a.prodHr += r.prodHr; a.fmHr += r.finalMastHr;
+      if (r.newLaunch && r.title && r.title !== 'unallocated') a.launches.add(r.title);
+    });
+    const groups = [...new Set(Object.values(agg).flatMap(mo => Object.keys(mo)))].filter(Boolean).sort();
+    const aggVal = (mo, g, key) => { const c = agg[mo] && agg[mo][g]; if (!c) return 0; const v = c[key]; return v instanceof Set ? v.size : (v||0); };
+
+    document.getElementById('mom-content').innerHTML = `
+      <div class="mom-grid">
+        ${METRICS.map(m => `
+          <div class="mom-section">
+            <div class="mom-section-hdr">
+              <div>
+                <div class="mom-section-title" style="border-left:3px solid ${m.color};padding-left:8px">${m.title}</div>
+                <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">By AI/PGC · MoM</div>
+              </div>
+              <div class="mom-section-sub" id="${m.id}-summary"></div>
+            </div>
+            <div class="mom-chart-body"><canvas id="${m.id}-chart"></canvas></div>
+            <div class="mom-hrs-table" id="${m.id}-table"></div>
+          </div>
+        `).join('')}
+        <div class="mom-section">
+          <div class="mom-section-hdr">
+            <div>
+              <div class="mom-section-title" style="border-left:3px solid #14b8a6;padding-left:8px">New Launches</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">By AI/PGC · MoM</div>
+            </div>
+            <div class="mom-section-sub" id="mom-launch-summary"></div>
+          </div>
+          <div class="mom-chart-body"><canvas id="mom-launch-chart"></canvas></div>
+          <div class="mom-hrs-table" id="mom-launch-table"></div>
+        </div>
+      </div>`;
+
+    METRICS.forEach(m => {
+      const byGroup  = {};
+      const hrsByGroup = {};
+      groups.forEach(g => {
+        byGroup[g]    = months.map(mo => aggVal(mo, g, m.key));
+        hrsByGroup[g] = months.map(mo => aggVal(mo, g, m.hrsKey));
+      });
+      const totals = months.map(mo => groups.reduce((s,g) => s + aggVal(mo, g, m.key), 0));
+
+      if (months.length >= 2) {
+        const last = totals.length - 1;
+        const prev = totals[last-1] || 0, curr = totals[last] || 0;
+        if (prev > 0) {
+          const pct = ((curr-prev)/prev*100).toFixed(1);
+          const up = curr >= prev;
+          document.getElementById(m.id+'-summary').innerHTML =
+            `<span style="color:${up?'#f59e0b':'#10b981'};font-weight:700">${up?'▲':'▼'} ${Math.abs(pct)}% MoM</span>`;
+        }
+      }
+
+      const datasets = [];
+      groups.forEach(g => {
+        const color = typeColor(g);
+        datasets.push({ label:g, data:byGroup[g], borderColor:color, backgroundColor:color+'22',
+          borderWidth:2.5, pointRadius:3, pointHoverRadius:5, tension:0.3, fill:false });
+      });
+      datasets.push({ label:'Total', data:totals, borderColor:'#f1f5f9',
+        backgroundColor:'#f1f5f920', borderWidth:2, borderDash:[5,3],
+        pointRadius:3, pointHoverRadius:5, tension:0.3, fill:false });
+
+      const ctx = document.getElementById(m.id+'-chart').getContext('2d');
+      charts[m.id] = new Chart(ctx, {
+        type:'line', data:{ labels:months.map(fmt), datasets },
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          interaction:{ mode:'index', intersect:false },
+          plugins:{
+            legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:12 }},
+            tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${cFmt(c.parsed.y)}` }}
+          },
+          scales:{
+            x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+            y:{ ticks:{ color:'#94a3b8', font:{size:11},
+              callback: v => '$'+(v>=1000?(v/1000).toFixed(0)+'k':Math.round(v)) },
+              grid:{ color:'#334155' } }
+          }
+        }
+      });
+
+      const hdrCols = groups.map(g=>`<th style="color:${typeColor(g)}">${g}</th><th>${m.hrsLabel}</th>`).join('') + '<th>Total</th><th>MoM%</th>';
+      const bodyRows = months.map((mo,i) => {
+        const prev = i > 0 ? totals[i-1] : null;
+        const mom = prev && prev > 0 ? ((totals[i]-prev)/prev*100).toFixed(1) : null;
+        const momHtml = mom == null ? '—' : `<span style="color:${parseFloat(mom)>0?'#f59e0b':'#10b981'};font-weight:700">${parseFloat(mom)>0?'▲':'▼'}${Math.abs(mom)}%</span>`;
+        const groupCols = groups.map(g=>`<td>${cFmt(byGroup[g][i])}</td><td>${(hrsByGroup[g][i]||0).toFixed(1)}</td>`).join('');
+        return `<tr><td>${fmt(mo)}</td>${groupCols}<td><strong>${cFmt(totals[i])}</strong></td><td>${momHtml}</td></tr>`;
+      }).join('');
+      document.getElementById(m.id+'-table').innerHTML =
+        `<table><thead><tr><th>Month</th>${hdrCols}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+    });
+
+    const launchByGroup = {};
+    groups.forEach(g => { launchByGroup[g] = months.map(mo => aggVal(mo, g, 'launches')); });
+    const totalLaunches = months.map(mo => groups.reduce((s,g) => s + aggVal(mo, g, 'launches'), 0));
+
+    if (months.length >= 2) {
+      const last = totalLaunches.length - 1;
+      document.getElementById('mom-launch-summary').innerHTML =
+        `<span style="color:var(--teal);font-weight:700">${totalLaunches[last]} in ${fmt(months[last])}</span>`;
     }
 
-    // Chart datasets: one line per group + trendline
-    const datasets = [];
-    groups.forEach(g => {
-      const color = gColor(g);
-      datasets.push({ label:g, data:byGroup[g], borderColor:color, backgroundColor:color+'22',
-        borderWidth:2.5, pointRadius:3, pointHoverRadius:5, tension:0.3, fill:false });
-      datasets.push({ label:g+' trend', data:_linReg(byGroup[g]), borderColor:color,
-        borderWidth:1.5, borderDash:[6,4], pointRadius:0, tension:0, fill:false });
-    });
+    const launchDatasets = groups.map(g => ({
+      label:g, data:launchByGroup[g], borderColor:typeColor(g),
+      backgroundColor:typeColor(g)+'33', borderWidth:2.5, pointRadius:3, tension:0.3, fill:true
+    }));
+    launchDatasets.push({ label:'Total', data:totalLaunches, borderColor:'#f1f5f9',
+      borderWidth:2, borderDash:[5,3], pointRadius:3, tension:0.3, fill:false });
 
-    const ctx = document.getElementById(m.id+'-chart').getContext('2d');
-    charts[m.id] = new Chart(ctx, {
-      type:'line', data:{ labels:months.map(fmt), datasets },
+    const lctx = document.getElementById('mom-launch-chart').getContext('2d');
+    charts['mom-launch'] = new Chart(lctx, {
+      type:'line', data:{ labels:months.map(fmt), datasets:launchDatasets },
       options:{
         responsive:true, maintainAspectRatio:false,
         interaction:{ mode:'index', intersect:false },
         plugins:{
-          legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:12,
-            filter: item => !item.label?.includes(' trend') }},
-          tooltip:{ filter: item => !item.dataset.label?.includes(' trend'),
-            callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${cFmt(ctx.parsed.y)}` }}
+          legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:12 }},
+          tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${c.parsed.y} launches` }}
         },
         scales:{
           x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
-          y:{ ticks:{ color:'#94a3b8', font:{size:11},
-            callback: v => '$'+(v>=1000?(v/1000).toFixed(0)+'k':Math.round(v)) },
-            grid:{ color:'#334155' } }
+          y:{ ticks:{ color:'#94a3b8', font:{size:11}, stepSize:1 }, grid:{ color:'#334155' } }
         }
       }
     });
 
-    // Hours + cost table
-    const hdrCols = groups.map(g=>`<th style="color:${gColor(g)}">${g}</th><th>${m.hrsLabel}</th>`).join('') + '<th>Total</th><th>MoM%</th>';
-    const bodyRows = months.map((mo,i) => {
-      const prev = i > 0 ? totals[i-1] : null;
-      const mom = prev && prev > 0 ? ((totals[i]-prev)/prev*100).toFixed(1) : null;
-      const momHtml = mom == null ? '—' : `<span style="color:${parseFloat(mom)>0?'#f59e0b':'#10b981'};font-weight:700">${parseFloat(mom)>0?'▲':'▼'}${Math.abs(mom)}%</span>`;
-      const groupCols = groups.map(g=>`<td>${cFmt(byGroup[g][i])}</td><td>${(hrsByGroup[g][i]||0).toFixed(1)}</td>`).join('');
-      return `<tr><td>${fmt(mo)}</td>${groupCols}<td><strong>${cFmt(totals[i])}</strong></td><td>${momHtml}</td></tr>`;
+    const lHdrCols = groups.map(g=>`<th style="color:${typeColor(g)}">${g}</th>`).join('') + '<th>Total</th>';
+    const lBodyRows = months.map((mo,i) => {
+      const groupCols = groups.map(g=>`<td>${launchByGroup[g][i]||0}</td>`).join('');
+      return `<tr><td>${fmt(mo)}</td>${groupCols}<td><strong>${totalLaunches[i]}</strong></td></tr>`;
     }).join('');
-
-    document.getElementById(m.id+'-table').innerHTML =
-      `<table><thead><tr><th>Month</th>${hdrCols}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-  });
-
-  // New Launches — already pre-aggregated as Set sizes
-  const launchByGroup = {};
-  groups.forEach(g => { launchByGroup[g] = months.map(mo => aggVal(mo, g, 'launches')); });
-  const totalLaunches = months.map(mo => groups.reduce((s, g) => s + aggVal(mo, g, 'launches'), 0));
-
-  if (months.length >= 2) {
-    const last = totalLaunches.length - 1;
-    document.getElementById('mom-launch-summary').innerHTML =
-      `<span style="color:var(--teal);font-weight:700">${totalLaunches[last]} launches in ${fmt(months[last])}</span>`;
+    document.getElementById('mom-launch-table').innerHTML =
+      `<table><thead><tr><th>Month</th>${lHdrCols}</tr></thead><tbody>${lBodyRows}</tbody></table>`;
   }
-
-  const launchDatasets = [];
-  groups.forEach(g => {
-    const color = gColor(g);
-    launchDatasets.push({ label:g, data:launchByGroup[g], borderColor:color, backgroundColor:color+'33',
-      borderWidth:2.5, pointRadius:3, tension:0.3, fill:true });
-    launchDatasets.push({ label:g+' trend', data:_linReg(launchByGroup[g]), borderColor:color,
-      borderWidth:1.5, borderDash:[6,4], pointRadius:0, tension:0, fill:false });
-  });
-
-  const lctx = document.getElementById('mom-launch-chart').getContext('2d');
-  charts['mom-launch'] = new Chart(lctx, {
-    type:'line', data:{ labels:months.map(fmt), datasets:launchDatasets },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      interaction:{ mode:'index', intersect:false },
-      plugins:{
-        legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:12,
-          filter: item => !item.label?.includes(' trend') }},
-        tooltip:{ filter: item => !item.dataset.label?.includes(' trend'),
-          callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} launches` }}
-      },
-      scales:{
-        x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
-        y:{ ticks:{ color:'#94a3b8', font:{size:11}, stepSize:1 }, grid:{ color:'#334155' } }
-      }
-    }
-  });
-
-  // Launch count table
-  const lHdrCols = groups.map(g=>`<th style="color:${gColor(g)}">${g}</th>`).join('') + '<th>Total</th>';
-  const lBodyRows = months.map((mo,i) => {
-    const groupCols = groups.map(g=>`<td>${launchByGroup[g][i]||0}</td>`).join('');
-    return `<tr><td>${fmt(mo)}</td>${groupCols}<td><strong>${totalLaunches[i]}</strong></td></tr>`;
-  }).join('');
-  document.getElementById('mom-launch-table').innerHTML =
-    `<table><thead><tr><th>Month</th>${lHdrCols}</tr></thead><tbody>${lBodyRows}</tbody></table>`;
 }
 
 // ─── RENDER DASHBOARD ─────────────────────────────────────────────────
