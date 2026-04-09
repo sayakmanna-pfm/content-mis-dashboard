@@ -570,6 +570,7 @@ function processCSV(rows) {
       prodHr:       toNum(row[19]),
       finalMastEps: toNum(row[20]),
       finalMastHr:  toNum(row[21]),
+      editHr:       toNum(row[53]),
       editCost:     toNum(row[28]),
       editCPH:      toNum(row[29]),
       voaCost:      toNum(row[36]),
@@ -700,10 +701,10 @@ function renderMoMDashboard(data, months) {
   // ── SINGLE-PASS AGGREGATION (same structure for all tabs) ────────────
   const agg = {};
   d.forEach(r => {
-    if (!agg[r.ym]) agg[r.ym] = { editCost:0, voaCost:0, postCost:0, prodHr:0, fmHr:0, launches:new Set() };
+    if (!agg[r.ym]) agg[r.ym] = { editCost:0, voaCost:0, postCost:0, editHr:0, prodHr:0, fmHr:0, launches:new Set() };
     const a = agg[r.ym];
     a.editCost += r.editCost; a.voaCost += r.voaCost; a.postCost += r.postCost;
-    a.prodHr += r.prodHr; a.fmHr += r.finalMastHr;
+    a.editHr += r.editHr; a.prodHr += r.prodHr; a.fmHr += r.finalMastHr;
     if (r.newLaunch && r.title && r.title !== 'unallocated') a.launches.add(r.title);
   });
   const totVal = (mo, key) => { const c = agg[mo]; if (!c) return 0; const v = c[key]; return v instanceof Set ? v.size : (v||0); };
@@ -717,8 +718,10 @@ function renderMoMDashboard(data, months) {
   // Shared Y-axis max across all 3 cost charts (for comparison)
   const maxCostY = Math.max(...metricTotals.flat(), 1) * 1.12;
   const latestMo  = months.length > 0 ? fmt(months[months.length-1]) : '—';
+  const editHrTotals = months.map(mo => totVal(mo, 'editHr'));
   const prodHrTotals = months.map(mo => totVal(mo, 'prodHr'));
   const fmHrTotals   = months.map(mo => totVal(mo, 'fmHr'));
+  const grandEditHr  = editHrTotals.reduce((s,v)=>s+v,0);
   const grandProdHr  = prodHrTotals.reduce((s,v)=>s+v,0);
   const grandFmHr    = fmHrTotals.reduce((s,v)=>s+v,0);
 
@@ -758,11 +761,11 @@ function renderMoMDashboard(data, months) {
       <div class="mom-section">
         <div class="mom-section-hdr">
           <div>
-            <div class="mom-section-title" style="border-left:3px solid #38bdf8;padding-left:8px">Production &amp; FM Hours</div>
-            <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Prod Hrs · FM Hrs · ${tabLabel} · up to ${latestMo}</div>
+            <div class="mom-section-title" style="border-left:3px solid #38bdf8;padding-left:8px">Hours by Segment</div>
+            <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Editorial · Production · Post Production · ${tabLabel} · up to ${latestMo}</div>
           </div>
           <div class="mom-section-sub">
-            <span style="font-size:0.72rem;color:var(--muted)">${grandProdHr.toFixed(0)} prod hrs &nbsp;·&nbsp; ${grandFmHr.toFixed(0)} FM hrs</span>
+            <span style="font-size:0.72rem;color:var(--muted)">${grandEditHr.toFixed(0)} edit &nbsp;·&nbsp; ${grandProdHr.toFixed(0)} prod &nbsp;·&nbsp; ${grandFmHr.toFixed(0)} post hrs</span>
           </div>
         </div>
         <div class="mom-chart-body"><canvas id="mom-hours-chart"></canvas></div>
@@ -876,8 +879,9 @@ function renderMoMDashboard(data, months) {
     data:{
       labels: months.map(fmt),
       datasets:[
-        { label:'Prod Hours', data:prodHrTotals, backgroundColor:'#8b5cf699', borderColor:'#8b5cf6', borderWidth:1.5, borderRadius:3 },
-        { label:'FM Hours',   data:fmHrTotals,   backgroundColor:'#f59e0b99', borderColor:'#f59e0b', borderWidth:1.5, borderRadius:3 }
+        { label:'Editorial Hrs',       data:editHrTotals, backgroundColor:'#8b5cf699', borderColor:'#8b5cf6', borderWidth:1.5, borderRadius:3 },
+        { label:'Production Hrs',      data:prodHrTotals, backgroundColor:'#10b98199', borderColor:'#10b981', borderWidth:1.5, borderRadius:3 },
+        { label:'Post Production Hrs', data:fmHrTotals,   backgroundColor:'#f59e0b99', borderColor:'#f59e0b', borderWidth:1.5, borderRadius:3 }
       ]
     },
     options:{
