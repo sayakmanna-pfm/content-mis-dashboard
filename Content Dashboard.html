@@ -482,7 +482,7 @@ function loadFromGoogleSheets(skipCache) {
         // Instant render from cache
         document.getElementById('gs-status').textContent = 'Loading from cache…';
         setProgress(80, 'Loading from cache…');
-        parseCsvAndRender(cached.csv, true);
+        try { parseCsvAndRender(cached.csv, true); } catch(e) { console.error('Cache render error:', e); }
         fetchSheetInBackground(); // refresh in background
         return;
       }
@@ -507,7 +507,12 @@ function loadFromGoogleSheets(skipCache) {
     })
     .then(csvText => {
       cacheCSV(csvText);
-      parseCsvAndRender(csvText, true);
+      try {
+        parseCsvAndRender(csvText, true);
+      } catch(renderErr) {
+        console.error('Render error:', renderErr);
+        showSheetError('Data loaded but render failed: ' + renderErr.message);
+      }
     })
     .catch(err => showSheetError('Could not fetch sheet. Ensure it is shared publicly. Error: ' + err.message));
 }
@@ -790,8 +795,8 @@ function renderMoMDashboard(data, months) {
         interaction:{ mode:'index', intersect:false },
         plugins:{
           legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:12,
-            filter: item => !item.label.includes(' trend') }},
-          tooltip:{ filter: item => !item.dataset.label.includes(' trend'),
+            filter: item => !item.label?.includes(' trend') }},
+          tooltip:{ filter: item => !item.dataset.label?.includes(' trend'),
             callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${cFmt(ctx.parsed.y)}` }}
         },
         scales:{
@@ -845,8 +850,8 @@ function renderMoMDashboard(data, months) {
       interaction:{ mode:'index', intersect:false },
       plugins:{
         legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:12,
-          filter: item => !item.label.includes(' trend') }},
-        tooltip:{ filter: item => !item.dataset.label.includes(' trend'),
+          filter: item => !item.label?.includes(' trend') }},
+        tooltip:{ filter: item => !item.dataset.label?.includes(' trend'),
           callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} launches` }}
       },
       scales:{
