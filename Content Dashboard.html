@@ -579,7 +579,8 @@ function processCSV(rows) {
       postCPH:      toNum(row[44]),
       totalCost:    toNum(row[46]),
       segCPH:       toNum(row[47]),
-      newLaunch:    toNum(row[56])
+      newLaunch:    toNum(row[56]),
+      ppv:          toNum(row[58])
     });
   });
 
@@ -711,6 +712,11 @@ function renderMoMDashboard(data, months) {
   const agg = {};
   const editByAiPgc    = {}; // { ym: { aiPgc: editCost } }
   const ppByVoaType    = {}; // { ym: { voaType: { voaCost, postCost } } }
+  const editHrByAiPgc  = {}; // { ym: { aiPgc: editHr } }
+  const prodHrByAiPgc  = {}; // { ym: { aiPgc: prodHr } }
+  const fmHrByAiPgc    = {}; // { ym: { aiPgc: fmHr } }
+  const launchByAiPgc  = {}; // { ym: { aiPgc: launchCount } }
+  const ppvByYm        = {}; // { ym: { launches: n, ppv: n } }
 
   d.forEach(r => {
     // Totals
@@ -725,6 +731,22 @@ function renderMoMDashboard(data, months) {
     if (!editByAiPgc[r.ym]) editByAiPgc[r.ym] = {};
     editByAiPgc[r.ym][gKey] = (editByAiPgc[r.ym][gKey] || 0) + r.editCost;
 
+    // Hrs by AI/PGC
+    editHrByAiPgc[r.ym] = editHrByAiPgc[r.ym] || {};
+    editHrByAiPgc[r.ym][gKey] = (editHrByAiPgc[r.ym][gKey] || 0) + r.editHr;
+    prodHrByAiPgc[r.ym] = prodHrByAiPgc[r.ym] || {};
+    prodHrByAiPgc[r.ym][gKey] = (prodHrByAiPgc[r.ym][gKey] || 0) + r.prodHr;
+    fmHrByAiPgc[r.ym] = fmHrByAiPgc[r.ym] || {};
+    fmHrByAiPgc[r.ym][gKey] = (fmHrByAiPgc[r.ym][gKey] || 0) + r.finalMastHr;
+    // Launches by AI/PGC
+    if (r.newLaunch > 0) {
+      launchByAiPgc[r.ym] = launchByAiPgc[r.ym] || {};
+      launchByAiPgc[r.ym][gKey] = (launchByAiPgc[r.ym][gKey] || 0) + r.newLaunch;
+      ppvByYm[r.ym] = ppvByYm[r.ym] || { launches:0, ppv:0 };
+      ppvByYm[r.ym].launches += r.newLaunch;
+      if (r.ppv === 1) ppvByYm[r.ym].ppv += r.newLaunch;
+    }
+
     // Prod+Post by VOA Type (col L)
     const vKey = r.voaType || 'Unknown';
     if (!ppByVoaType[r.ym]) ppByVoaType[r.ym] = {};
@@ -735,9 +757,13 @@ function renderMoMDashboard(data, months) {
 
   const totVal = (mo, key) => { const c = agg[mo]; if (!c) return 0; return c[key] || 0; };
 
-  // Unique groups for stacked charts
-  const aiPgcGroups = [...new Set(Object.values(editByAiPgc).flatMap(mo => Object.keys(mo)))].filter(g => g && g !== 'Unknown').sort();
-  const voaGroups   = [...new Set(Object.values(ppByVoaType).flatMap(mo => Object.keys(mo)))].filter(g => g && g !== 'Unknown').sort();
+  // Unique groups for stacked charts — with preferred ordering
+  const EDIT_ORDER = ['US PGC', 'India PGC', 'ER + VO', 'AI Adapted'];
+  const VOA_ORDER  = ['VOA', 'Top Tier AIVO', 'AIVO'];
+  const allAiPgcGroups = [...new Set(Object.values(editByAiPgc).flatMap(mo => Object.keys(mo)))].filter(g => g && g !== 'Unknown');
+  const allVoaGroups   = [...new Set(Object.values(ppByVoaType).flatMap(mo => Object.keys(mo)))].filter(g => g && g !== 'Unknown');
+  const aiPgcGroups = [...EDIT_ORDER.filter(g => allAiPgcGroups.includes(g)), ...allAiPgcGroups.filter(g => !EDIT_ORDER.includes(g)).sort()];
+  const voaGroups   = [...VOA_ORDER.filter(g => allVoaGroups.includes(g)),   ...allVoaGroups.filter(g => !VOA_ORDER.includes(g)).sort()];
 
   const metricTotals  = METRICS.map(m => months.map(mo => totVal(mo, m.key)));
   const totalLaunches = months.map(mo => totVal(mo, 'launches'));
@@ -802,7 +828,8 @@ function renderMoMDashboard(data, months) {
       </div>
     </div>
     <!-- INDIVIDUAL COST CHARTS -->
-    <div class="mom-grid">
+    <!-- Row 1: Editorial Cost + Editorial Hrs by Show Type -->
+    <div class="mom-grid" style="margin-bottom:16px">
       <div class="mom-section">
         <div class="mom-section-hdr">
           <div>
@@ -817,6 +844,18 @@ function renderMoMDashboard(data, months) {
       <div class="mom-section">
         <div class="mom-section-hdr">
           <div>
+            <div class="mom-section-title" style="border-left:3px solid #38bdf8;padding-left:8px">Editorial Hours by Show Type</div>
+            <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Monthly · ${tabLabel} · up to ${latestMo}</div>
+          </div>
+        </div>
+        <div class="mom-chart-body"><canvas id="mom-edit-hrs-chart"></canvas></div>
+      </div>
+    </div>
+    <!-- Row 2: Prod+Post Cost + Prod/Post Hrs by Show Type -->
+    <div class="mom-grid" style="margin-bottom:16px">
+      <div class="mom-section">
+        <div class="mom-section-hdr">
+          <div>
             <div class="mom-section-title" style="border-left:3px solid #10b981;padding-left:8px">Production &amp; Post Production Cost</div>
             <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Monthly · ${tabLabel} · up to ${latestMo}</div>
           </div>
@@ -825,6 +864,29 @@ function renderMoMDashboard(data, months) {
         <div class="mom-chart-body"><canvas id="mom-prodpost-chart"></canvas></div>
         <div class="mom-hrs-table" id="mom-prodpost-table"></div>
       </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="mom-section" style="flex:1">
+          <div class="mom-section-hdr">
+            <div>
+              <div class="mom-section-title" style="border-left:3px solid #10b981;padding-left:8px">Production Hours by Show Type</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Monthly · ${tabLabel} · up to ${latestMo}</div>
+            </div>
+          </div>
+          <div class="mom-chart-body"><canvas id="mom-prodhr-chart"></canvas></div>
+        </div>
+        <div class="mom-section" style="flex:1">
+          <div class="mom-section-hdr">
+            <div>
+              <div class="mom-section-title" style="border-left:3px solid #f59e0b;padding-left:8px">Post Production Hours by Show Type</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Monthly · ${tabLabel} · up to ${latestMo}</div>
+            </div>
+          </div>
+          <div class="mom-chart-body"><canvas id="mom-fmhr-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <!-- Row 3: New Launches (stacked by show type) + PPV% -->
+    <div class="mom-grid">
       <div class="mom-section">
         <div class="mom-section-hdr">
           <div>
@@ -840,6 +902,17 @@ function renderMoMDashboard(data, months) {
         <div class="mom-chart-body"><canvas id="mom-launch-chart"></canvas></div>
         <div class="mom-hrs-table" id="mom-launch-table"></div>
       </div>
+      <div class="mom-section">
+        <div class="mom-section-hdr">
+          <div>
+            <div class="mom-section-title" style="border-left:3px solid #f472b6;padding-left:8px">PPV%</div>
+            <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">% of New Launches that turned PPV · ${tabLabel} · up to ${latestMo}</div>
+          </div>
+          <div class="mom-section-sub" id="mom-ppv-summary"></div>
+        </div>
+        <div class="mom-chart-body"><canvas id="mom-ppv-chart"></canvas></div>
+        <div class="mom-hrs-table" id="mom-ppv-table"></div>
+      </div>
     </div>`;
 
   // ── INDIVIDUAL COST BAR CHARTS ───────────────────────────────────────
@@ -847,6 +920,16 @@ function renderMoMDashboard(data, months) {
   const xStackCfg = { stacked:true, ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } };
   const yStackCfg = { stacked:true, max:maxCostY, ticks:yCostTick, grid:{ color:'#334155' } };
   const legendCfg = { labels:{ color:'#94a3b8', font:{size:11}, padding:12 } };
+  const xLineCfg  = { ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } };
+  const yHrTick   = { color:'#94a3b8', font:{size:11}, callback: v => v.toFixed(0)+'h' };
+  function lineDatasets(groups, byAiPgc) {
+    return groups.map(g => ({
+      label: g, type:'line',
+      data: months.map(mo => byAiPgc[mo]?.[g] || 0),
+      borderColor: typeColor(g), backgroundColor: typeColor(g)+'22',
+      borderWidth:2, pointRadius:3, tension:0.3, fill:false
+    }));
+  }
 
   // ── Editorial Cost — stacked by AI/PGC (col G) ───────────────────────
   const editVals    = metricTotals[0];
@@ -876,6 +959,16 @@ function renderMoMDashboard(data, months) {
       return `<tr><td>${fmt(mo)}</td>${aiPgcGroups.map(g=>`<td>${cFmt(editByAiPgc[mo]?.[g]||0)}</td>`).join('')}<td><strong>${cFmt(editVals[i])}</strong></td><td>${(editHrsVals[i]||0).toFixed(1)}</td><td>${momHtml}</td></tr>`;
     }).join('')
   }</tbody></table>`;
+
+  // ── Editorial Hours line chart — by AI/PGC ────────────────────────────
+  charts['mom-edit-hrs'] = new Chart(document.getElementById('mom-edit-hrs-chart').getContext('2d'), {
+    type:'line',
+    data:{ labels:months.map(fmt), datasets: lineDatasets(aiPgcGroups, editHrByAiPgc) },
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+      plugins:{ legend: legendCfg, tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)} hrs` }} },
+      scales:{ x: xLineCfg, y:{ ticks: yHrTick, grid:{ color:'#334155' } } }
+    }
+  });
 
   // ── Production + Post Production — stacked by VOA Type (col L) ────────
   const prodVals      = metricTotals[1];
@@ -908,6 +1001,26 @@ function renderMoMDashboard(data, months) {
       return `<tr><td>${fmt(mo)}</td>${voaGroups.map(vt=>`<td>${cFmt((ppByVoaType[mo]?.[vt]?.voaCost||0)+(ppByVoaType[mo]?.[vt]?.postCost||0))}</td>`).join('')}<td><strong>${cFmt(prodPostTotals[i])}</strong></td><td>${(prodHrsVals[i]||0).toFixed(1)}</td><td>${(fmHrsVals[i]||0).toFixed(1)}</td><td>${momHtml}</td></tr>`;
     }).join('')
   }</tbody></table>`;
+
+  // ── Production Hours line chart — by AI/PGC ───────────────────────────
+  charts['mom-prodhr'] = new Chart(document.getElementById('mom-prodhr-chart').getContext('2d'), {
+    type:'line',
+    data:{ labels:months.map(fmt), datasets: lineDatasets(aiPgcGroups, prodHrByAiPgc) },
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+      plugins:{ legend: legendCfg, tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)} hrs` }} },
+      scales:{ x: xLineCfg, y:{ ticks: yHrTick, grid:{ color:'#334155' } } }
+    }
+  });
+
+  // ── Post Production Hours line chart — by AI/PGC ──────────────────────
+  charts['mom-fmhr'] = new Chart(document.getElementById('mom-fmhr-chart').getContext('2d'), {
+    type:'line',
+    data:{ labels:months.map(fmt), datasets: lineDatasets(aiPgcGroups, fmHrByAiPgc) },
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+      plugins:{ legend: legendCfg, tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)} hrs` }} },
+      scales:{ x: xLineCfg, y:{ ticks: yHrTick, grid:{ color:'#334155' } } }
+    }
+  });
 
   // ── COMBINED COST CHART (grouped bars, all 3 segments) ───────────────
   const cctx = document.getElementById('mom-combined-chart').getContext('2d');
@@ -962,63 +1075,105 @@ function renderMoMDashboard(data, months) {
     }
   });
 
-  // ── NEW LAUNCHES BAR CHART (filterable by Show Type / VOA Type) ──────
+  // ── NEW LAUNCHES — stacked by Show Type + filter dropdowns ───────────
   // Pre-group launch rows by ym for fast filter queries
   const launchRowsByYm = {};
   d.filter(r => r.newLaunch > 0).forEach(r => {
     if (!launchRowsByYm[r.ym]) launchRowsByYm[r.ym] = [];
     launchRowsByYm[r.ym].push(r);
   });
-  // Populate filter dropdowns with values present in launch rows
   const allLaunchRows = Object.values(launchRowsByYm).flat();
-  const launchAiPgcGroups = [...new Set(allLaunchRows.map(r => r.aiPgc).filter(Boolean))].sort();
+  const launchAiPgcGroups = [...new Set(allLaunchRows.map(r => r.aiPgc).filter(Boolean))];
+  const launchAiPgcOrdered = [...EDIT_ORDER.filter(g => launchAiPgcGroups.includes(g)), ...launchAiPgcGroups.filter(g => !EDIT_ORDER.includes(g)).sort()];
   const launchVoaGroups   = [...new Set(allLaunchRows.map(r => r.voaType).filter(Boolean))].sort();
   const launchAiPgcSel = document.getElementById('launch-aiPgc-filter');
   const launchVoaSel   = document.getElementById('launch-voa-filter');
-  launchAiPgcGroups.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; launchAiPgcSel.appendChild(o); });
+  launchAiPgcOrdered.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; launchAiPgcSel.appendChild(o); });
   launchVoaGroups.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; launchVoaSel.appendChild(o); });
 
-  function getLaunchCounts(aiPgcF, voaF) {
+  function getLaunchRows(aiPgcF, voaF) {
     return months.map(mo => {
       const rows = launchRowsByYm[mo] || [];
-      if (!aiPgcF && !voaF) return rows.length;
-      return rows.filter(r => (!aiPgcF || r.aiPgc === aiPgcF) && (!voaF || r.voaType === voaF)).length;
+      if (!aiPgcF && !voaF) return rows;
+      return rows.filter(r => (!aiPgcF || r.aiPgc === aiPgcF) && (!voaF || r.voaType === voaF));
     });
   }
 
   function redrawLaunchChart() {
     const aiPgcF = launchAiPgcSel.value;
     const voaF   = launchVoaSel.value;
-    const counts = getLaunchCounts(aiPgcF, voaF);
+    const rowsByMonth = getLaunchRows(aiPgcF, voaF);
+    const counts = rowsByMonth.map(rows => rows.reduce((s,r) => s + r.newLaunch, 0));
+
     if (months.length >= 2) {
       const last = counts.length - 1;
       document.getElementById('mom-launch-summary').innerHTML =
         `<span style="color:var(--teal);font-weight:700">${counts[last]} in ${fmt(months[last])}</span>`;
     }
     if (charts['mom-launch']) { charts['mom-launch'].destroy(); delete charts['mom-launch']; }
+
+    // Build stacked datasets by show type
+    const stackGroups = aiPgcF ? [aiPgcF] : launchAiPgcOrdered;
+    const stackedDatasets = stackGroups.map(g => ({
+      label: g, stack:'launch',
+      data: months.map((mo,i) => rowsByMonth[i].filter(r => r.aiPgc === g).reduce((s,r) => s + r.newLaunch, 0)),
+      backgroundColor: typeColor(g)+'99', borderColor: typeColor(g), borderWidth:1.5, borderRadius:3
+    }));
+
     charts['mom-launch'] = new Chart(document.getElementById('mom-launch-chart').getContext('2d'), {
       type:'bar',
-      data:{ labels:months.map(fmt), datasets:[{ label:'New Launches', data:counts,
-        backgroundColor:'#14b8a699', borderColor:'#14b8a6', borderWidth:1.5, borderRadius:4 }] },
+      data:{ labels:months.map(fmt), datasets: stackedDatasets },
       options:{
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false },
-          tooltip:{ callbacks:{ label: c => ` ${c.parsed.y} launches` }} },
+        responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+        plugins:{ legend: legendCfg, tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${c.parsed.y} launches` }} },
         scales:{
-          x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
-          y:{ ticks:{ color:'#94a3b8', font:{size:11}, stepSize:1 }, grid:{ color:'#334155' } }
+          x:{ stacked:true, ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+          y:{ stacked:true, ticks:{ color:'#94a3b8', font:{size:11}, stepSize:1 }, grid:{ color:'#334155' } }
         }
       }
     });
     document.getElementById('mom-launch-table').innerHTML =
-      `<table><thead><tr><th>Month</th><th>Launches</th></tr></thead><tbody>${
-        months.map((mo,i) => `<tr><td>${fmt(mo)}</td><td><strong>${counts[i]}</strong></td></tr>`).join('')
+      `<table><thead><tr><th>Month</th>${stackGroups.map(g=>`<th style="color:${typeColor(g)}">${g}</th>`).join('')}<th>Total</th></tr></thead><tbody>${
+        months.map((mo,i) => {
+          const rowSet = rowsByMonth[i];
+          return `<tr><td>${fmt(mo)}</td>${stackGroups.map(g=>`<td>${rowSet.filter(r=>r.aiPgc===g).reduce((s,r)=>s+r.newLaunch,0)}</td>`).join('')}<td><strong>${counts[i]}</strong></td></tr>`;
+        }).join('')
       }</tbody></table>`;
   }
 
   launchAiPgcSel.addEventListener('change', redrawLaunchChart);
   launchVoaSel.addEventListener('change', redrawLaunchChart);
   redrawLaunchChart();
+
+  // ── PPV% CHART ────────────────────────────────────────────────────────
+  const ppvPct    = months.map(mo => { const p = ppvByYm[mo]; return p && p.launches > 0 ? +(p.ppv / p.launches * 100).toFixed(1) : 0; });
+  const ppvCounts = months.map(mo => { const p = ppvByYm[mo]; return p ? p.ppv : 0; });
+  const ppvBase   = months.map(mo => { const p = ppvByYm[mo]; return p ? p.launches : 0; });
+  const grandPpvPct = (() => { const tl = ppvBase.reduce((s,v)=>s+v,0), tp = ppvCounts.reduce((s,v)=>s+v,0); return tl > 0 ? (tp/tl*100).toFixed(1) : '0'; })();
+  if (months.length >= 2) {
+    document.getElementById('mom-ppv-summary').innerHTML =
+      `<span style="color:#f472b6;font-weight:700">${grandPpvPct}% overall</span>`;
+  }
+  charts['mom-ppv'] = new Chart(document.getElementById('mom-ppv-chart').getContext('2d'), {
+    type:'bar',
+    data:{ labels:months.map(fmt), datasets:[{
+      label:'PPV%', data:ppvPct,
+      backgroundColor:'#f472b699', borderColor:'#f472b6', borderWidth:1.5, borderRadius:4
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false },
+        tooltip:{ callbacks:{ label: c => ` ${c.parsed.y}% (${ppvCounts[c.dataIndex]} of ${ppvBase[c.dataIndex]} launches)` }} },
+      scales:{
+        x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+        y:{ min:0, max:100, ticks:{ color:'#94a3b8', font:{size:11}, callback: v => v+'%' }, grid:{ color:'#334155' } }
+      }
+    }
+  });
+  document.getElementById('mom-ppv-table').innerHTML =
+    `<table><thead><tr><th>Month</th><th>Launches</th><th>PPV Count</th><th>PPV%</th></tr></thead><tbody>${
+      months.map((mo,i) => `<tr><td>${fmt(mo)}</td><td>${ppvBase[i]}</td><td>${ppvCounts[i]}</td><td><strong>${ppvPct[i]}%</strong></td></tr>`).join('')
+    }</tbody></table>`;
 }
 
 // ─── RENDER DASHBOARD ─────────────────────────────────────────────────
