@@ -714,11 +714,11 @@ function renderMoMDashboard(data, months) {
 
   d.forEach(r => {
     // Totals
-    if (!agg[r.ym]) agg[r.ym] = { editCost:0, voaCost:0, postCost:0, editHr:0, prodHr:0, fmHr:0, launches:new Set() };
+    if (!agg[r.ym]) agg[r.ym] = { editCost:0, voaCost:0, postCost:0, editHr:0, prodHr:0, fmHr:0, launches:0 };
     const a = agg[r.ym];
     a.editCost += r.editCost; a.voaCost += r.voaCost; a.postCost += r.postCost;
     a.editHr += r.editHr; a.prodHr += r.prodHr; a.fmHr += r.finalMastHr;
-    if (r.newLaunch && r.title && r.title !== 'unallocated') a.launches.add(r.title);
+    if (r.newLaunch) a.launches += 1;
 
     // Editorial by AI/PGC (col G)
     const gKey = r.aiPgc || 'Unknown';
@@ -733,7 +733,7 @@ function renderMoMDashboard(data, months) {
     ppByVoaType[r.ym][vKey].postCost += r.postCost;
   });
 
-  const totVal = (mo, key) => { const c = agg[mo]; if (!c) return 0; const v = c[key]; return v instanceof Set ? v.size : (v||0); };
+  const totVal = (mo, key) => { const c = agg[mo]; if (!c) return 0; return c[key] || 0; };
 
   // Unique groups for stacked charts
   const aiPgcGroups = [...new Set(Object.values(editByAiPgc).flatMap(mo => Object.keys(mo)))].filter(g => g && g !== 'Unknown').sort();
