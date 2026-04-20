@@ -923,12 +923,20 @@ function renderMoMDashboard(data, months) {
   const xLineCfg  = { ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } };
   const yHrTick   = { color:'#94a3b8', font:{size:11}, callback: v => v.toFixed(0)+'h' };
   function lineDatasets(groups, byAiPgc) {
-    return groups.map(g => ({
-      label: g, type:'line',
+    const groupLines = groups.map(g => ({
+      label: g, type:'line', order:1,
       data: months.map(mo => byAiPgc[mo]?.[g] || 0),
       borderColor: typeColor(g), backgroundColor: typeColor(g)+'22',
       borderWidth:2, pointRadius:3, tension:0.3, fill:false
     }));
+    const totalLine = {
+      label:'Total', type:'line', order:0,
+      data: months.map(mo => groups.reduce((s,g) => s + (byAiPgc[mo]?.[g] || 0), 0)),
+      borderColor:'#f1f5f9', backgroundColor:'#f1f5f922',
+      borderWidth:3.5, pointRadius:5, pointHoverRadius:7,
+      borderDash:[], tension:0.3, fill:false
+    };
+    return [...groupLines, totalLine];
   }
 
   // ── Editorial Cost — stacked by AI/PGC (col G) ───────────────────────
