@@ -590,8 +590,16 @@ function processCSV(rows) {
 
 // ─── FILTERS ─────────────────────────────────────────────────────────────────
 function populateFilters() {
-  const cats = [...new Set(rawData.map(r => r.category).filter(Boolean))].sort();
-  const types = [...new Set(rawData.map(r => classifyType(r.showType)))].sort();
+  // Category order: pinned first, then rest alphabetically
+  const CAT_ORDER = ['Romance', 'Romantasy', 'Fantasy', 'CrimeThriller'];
+  const allCats = [...new Set(rawData.map(r => r.category).filter(Boolean))];
+  const cats = [
+    ...CAT_ORDER.filter(c => allCats.includes(c)),
+    ...allCats.filter(c => !CAT_ORDER.includes(c)).sort()
+  ];
+
+  // Show Type filter now uses column G (AI/PGC)
+  const types = [...new Set(rawData.map(r => r.aiPgc).filter(Boolean))].sort();
 
   const mStart = document.getElementById('filter-month-start');
   const mEnd = document.getElementById('filter-month-end');
@@ -602,7 +610,6 @@ function populateFilters() {
     mStart.add(new Option(fmt(m), m));
     mEnd.add(new Option(fmt(m), m));
   });
-  // Default: full range
   mStart.value = '';
   mEnd.value = '';
 
@@ -627,7 +634,7 @@ function getFilteredData() {
     if (mStart && r.ym < mStart) return false;
     if (mEnd && r.ym > mEnd) return false;
     if (cat && r.category !== cat) return false;
-    if (type && classifyType(r.showType) !== type) return false;
+    if (type && r.aiPgc !== type) return false;
     return true;
   });
 }
