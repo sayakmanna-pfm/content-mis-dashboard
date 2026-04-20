@@ -579,7 +579,7 @@ function processCSV(rows) {
       postCPH:      toNum(row[44]),
       totalCost:    toNum(row[46]),
       segCPH:       toNum(row[47]),
-      newLaunch:    String(row[56] || '').trim() === '1'
+      newLaunch:    toNum(row[56])
     });
   });
 
@@ -718,7 +718,7 @@ function renderMoMDashboard(data, months) {
     const a = agg[r.ym];
     a.editCost += r.editCost; a.voaCost += r.voaCost; a.postCost += r.postCost;
     a.editHr += r.editHr; a.prodHr += r.prodHr; a.fmHr += r.finalMastHr;
-    if (r.newLaunch) a.launches += 1;
+    a.launches += r.newLaunch;
 
     // Editorial by AI/PGC (col G)
     const gKey = r.aiPgc || 'Unknown';
@@ -965,7 +965,7 @@ function renderMoMDashboard(data, months) {
   // ── NEW LAUNCHES BAR CHART (filterable by Show Type / VOA Type) ──────
   // Pre-group launch rows by ym for fast filter queries
   const launchRowsByYm = {};
-  d.filter(r => r.newLaunch).forEach(r => {
+  d.filter(r => r.newLaunch > 0).forEach(r => {
     if (!launchRowsByYm[r.ym]) launchRowsByYm[r.ym] = [];
     launchRowsByYm[r.ym].push(r);
   });
