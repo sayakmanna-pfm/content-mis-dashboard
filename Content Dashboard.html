@@ -579,7 +579,7 @@ function processCSV(rows) {
       postCPH:      toNum(row[44]),
       totalCost:    toNum(row[46]),
       segCPH:       toNum(row[47]),
-      newLaunch:    (() => { const v = String(row[56] || '').trim().toUpperCase(); return v !== '' && v !== '0' && v !== 'N' && v !== 'NO' && v !== 'FALSE' && v !== 'EXTENSION'; })()
+      newLaunch:    String(row[56] || '').trim() === '1'
     });
   });
 
