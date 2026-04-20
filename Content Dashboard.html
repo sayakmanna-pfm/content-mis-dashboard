@@ -673,7 +673,9 @@ function _linReg(vals) {
 let _mainTab = 'overall';
 
 function buildMainTabs(data) {
-  const genres = [...new Set(data.map(r=>r.category).filter(Boolean))].sort();
+  const CAT_ORDER = ['Romance', 'Romantasy', 'Fantasy', 'CrimeThriller'];
+  const allGenres = [...new Set(data.map(r=>r.category).filter(Boolean))];
+  const genres = [...CAT_ORDER.filter(c => allGenres.includes(c)), ...allGenres.filter(c => !CAT_ORDER.includes(c)).sort()];
   const row = document.getElementById('main-tabs-row');
   const tabs = ['overall', ...genres];
   row.innerHTML = tabs.map(t =>
