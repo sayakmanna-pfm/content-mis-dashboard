@@ -831,7 +831,11 @@ function renderMoMDashboard(data, months) {
             <div class="mom-section-title" style="border-left:3px solid #14b8a6;padding-left:8px">New Launches</div>
             <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Monthly · ${tabLabel} · up to ${latestMo}</div>
           </div>
-          <div class="mom-section-sub" id="mom-launch-summary"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="launch-aiPgc-filter" style="font-size:0.72rem;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer"><option value="">All Show Types</option></select>
+            <select id="launch-voa-filter" style="font-size:0.72rem;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer"><option value="">All VOA Types</option></select>
+            <div class="mom-section-sub" id="mom-launch-summary"></div>
+          </div>
         </div>
         <div class="mom-chart-body"><canvas id="mom-launch-chart"></canvas></div>
         <div class="mom-hrs-table" id="mom-launch-table"></div>
@@ -958,31 +962,63 @@ function renderMoMDashboard(data, months) {
     }
   });
 
-  // ── NEW LAUNCHES BAR CHART ───────────────────────────────────────────
-  if (months.length >= 2) {
-    const last = totalLaunches.length - 1;
-    document.getElementById('mom-launch-summary').innerHTML =
-      `<span style="color:var(--teal);font-weight:700">${totalLaunches[last]} in ${fmt(months[last])}</span>`;
-  }
-  const lctx = document.getElementById('mom-launch-chart').getContext('2d');
-  charts['mom-launch'] = new Chart(lctx, {
-    type:'bar',
-    data:{ labels:months.map(fmt), datasets:[{ label:'New Launches', data:totalLaunches,
-      backgroundColor:'#14b8a699', borderColor:'#14b8a6', borderWidth:1.5, borderRadius:4 }] },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display:false },
-        tooltip:{ callbacks:{ label: c => ` ${c.parsed.y} launches` }} },
-      scales:{
-        x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
-        y:{ ticks:{ color:'#94a3b8', font:{size:11}, stepSize:1 }, grid:{ color:'#334155' } }
-      }
-    }
+  // ── NEW LAUNCHES BAR CHART (filterable by Show Type / VOA Type) ──────
+  // Pre-group launch rows by ym for fast filter queries
+  const launchRowsByYm = {};
+  d.filter(r => r.newLaunch).forEach(r => {
+    if (!launchRowsByYm[r.ym]) launchRowsByYm[r.ym] = [];
+    launchRowsByYm[r.ym].push(r);
   });
-  const lBodyRows = months.map((mo,i) =>
-    `<tr><td>${fmt(mo)}</td><td><strong>${totalLaunches[i]}</strong></td></tr>`).join('');
-  document.getElementById('mom-launch-table').innerHTML =
-    `<table><thead><tr><th>Month</th><th>Launches</th></tr></thead><tbody>${lBodyRows}</tbody></table>`;
+  // Populate filter dropdowns with values present in launch rows
+  const allLaunchRows = Object.values(launchRowsByYm).flat();
+  const launchAiPgcGroups = [...new Set(allLaunchRows.map(r => r.aiPgc).filter(Boolean))].sort();
+  const launchVoaGroups   = [...new Set(allLaunchRows.map(r => r.voaType).filter(Boolean))].sort();
+  const launchAiPgcSel = document.getElementById('launch-aiPgc-filter');
+  const launchVoaSel   = document.getElementById('launch-voa-filter');
+  launchAiPgcGroups.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; launchAiPgcSel.appendChild(o); });
+  launchVoaGroups.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; launchVoaSel.appendChild(o); });
+
+  function getLaunchCounts(aiPgcF, voaF) {
+    return months.map(mo => {
+      const rows = launchRowsByYm[mo] || [];
+      if (!aiPgcF && !voaF) return rows.length;
+      return rows.filter(r => (!aiPgcF || r.aiPgc === aiPgcF) && (!voaF || r.voaType === voaF)).length;
+    });
+  }
+
+  function redrawLaunchChart() {
+    const aiPgcF = launchAiPgcSel.value;
+    const voaF   = launchVoaSel.value;
+    const counts = getLaunchCounts(aiPgcF, voaF);
+    if (months.length >= 2) {
+      const last = counts.length - 1;
+      document.getElementById('mom-launch-summary').innerHTML =
+        `<span style="color:var(--teal);font-weight:700">${counts[last]} in ${fmt(months[last])}</span>`;
+    }
+    if (charts['mom-launch']) { charts['mom-launch'].destroy(); delete charts['mom-launch']; }
+    charts['mom-launch'] = new Chart(document.getElementById('mom-launch-chart').getContext('2d'), {
+      type:'bar',
+      data:{ labels:months.map(fmt), datasets:[{ label:'New Launches', data:counts,
+        backgroundColor:'#14b8a699', borderColor:'#14b8a6', borderWidth:1.5, borderRadius:4 }] },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false },
+          tooltip:{ callbacks:{ label: c => ` ${c.parsed.y} launches` }} },
+        scales:{
+          x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+          y:{ ticks:{ color:'#94a3b8', font:{size:11}, stepSize:1 }, grid:{ color:'#334155' } }
+        }
+      }
+    });
+    document.getElementById('mom-launch-table').innerHTML =
+      `<table><thead><tr><th>Month</th><th>Launches</th></tr></thead><tbody>${
+        months.map((mo,i) => `<tr><td>${fmt(mo)}</td><td><strong>${counts[i]}</strong></td></tr>`).join('')
+      }</tbody></table>`;
+  }
+
+  launchAiPgcSel.addEventListener('change', redrawLaunchChart);
+  launchVoaSel.addEventListener('change', redrawLaunchChart);
+  redrawLaunchChart();
 }
 
 // ─── RENDER DASHBOARD ─────────────────────────────────────────────────
