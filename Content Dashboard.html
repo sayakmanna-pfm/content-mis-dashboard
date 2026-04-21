@@ -933,7 +933,7 @@ function renderMoMDashboard(data, months) {
         <div class="mom-section-hdr">
           <div>
             <div class="mom-section-title" style="border-left:3px solid #a78bfa;padding-left:8px">Overall CPH by Show Type</div>
-            <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Stacked by show type contribution · ${tabLabel} · up to ${latestMo}</div>
+            <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Grouped by show type · each bar split by Editorial / Production / Post · ${tabLabel} · up to ${latestMo}</div>
           </div>
         </div>
         <div class="mom-chart-body"><canvas id="mom-cph1-chart"></canvas></div>
@@ -1254,39 +1254,60 @@ function renderMoMDashboard(data, months) {
     <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid ${k.color};padding-left:10px">$${k.val.toFixed(2)}</div>
   </div>`).join('');
 
-  // Chart 1: Overall CPH by show type — contribution stacked bar
-  // Each type's contribution = (type's total cost) / (overall total hours) for that month
-  const cph1Datasets = aiPgcGroups.map(g => ({
-    label: g, stack:'cph1',
-    data: months.map(mo => {
-      const totalHr = (agg[mo]?.editHr||0) + (agg[mo]?.prodHr||0) + (agg[mo]?.fmHr||0);
-      if (totalHr === 0) return 0;
-      const c = cphByAiPgc[mo]?.[g];
-      if (!c) return 0;
-      return +((c.editCost + c.voaCost + c.postCost) / totalHr).toFixed(2);
-    }),
-    backgroundColor: typeColor(g)+'99', borderColor: typeColor(g), borderWidth:1.5, borderRadius:2
-  }));
+  // Chart 1: Overall CPH by show type — grouped+stacked bars
+  // Each show type = its own stack group, split internally by segment CPH (own cost ÷ own hours)
+  // Opacity levels: Editorial (darkest) → Production → Post Production (lightest)
+  const cph1Datasets = aiPgcGroups.flatMap(g => {
+    const col = typeColor(g);
+    const seg = (key, hrKey) => months.map(mo => safeCPH(cphByAiPgc[mo]?.[g]?.[key]||0, cphByAiPgc[mo]?.[g]?.[hrKey]||0));
+    return [
+      { label: g,             stack: g, data: seg('editCost','editHr'),
+        backgroundColor: col+'ee', borderColor: col, borderWidth:1.5, borderRadius:2 },
+      { label: '__'+g+'_prod', stack: g, data: seg('voaCost','prodHr'),
+        backgroundColor: col+'88', borderColor: col, borderWidth:1 },
+      { label: '__'+g+'_post', stack: g, data: seg('postCost','fmHr'),
+        backgroundColor: col+'33', borderColor: col, borderWidth:1 },
+    ];
+  });
   charts['mom-cph1'] = new Chart(document.getElementById('mom-cph1-chart').getContext('2d'), {
     type:'bar',
     data:{ labels:months.map(fmt), datasets: cph1Datasets },
     options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
-      plugins:{ legend: legendCfg,
-        tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: $${c.parsed.y.toFixed(2)}/hr`,
-          footer: items => ` Total: $${items.reduce((s,i)=>s+i.parsed.y,0).toFixed(2)}/hr` }} },
+      plugins:{
+        legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:12,
+          filter: item => !item.text.startsWith('__') }},
+        tooltip:{ callbacks:{
+          label: c => {
+            const g = c.dataset.stack;
+            const seg = c.dataset.label.startsWith('__')
+              ? (c.dataset.label.includes('_prod') ? 'Production' : 'Post Prod') : 'Editorial';
+            return ` ${g} — ${seg}: $${c.parsed.y.toFixed(2)}/hr`;
+          },
+          footer: items => {
+            const totals = {};
+            items.forEach(i => { totals[i.dataset.stack] = (totals[i.dataset.stack]||0) + i.parsed.y; });
+            return Object.entries(totals).map(([g,v]) => ` ${g} Total: $${v.toFixed(2)}/hr`).join('\n');
+          }
+        }}
+      },
       scales:{ x:{ stacked:true, ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
                y:{ stacked:true, ticks: yCphTick, grid:{ color:'#334155' } } }
     }
   });
-  document.getElementById('mom-cph1-table').innerHTML = `<table><thead><tr><th>Month</th>${aiPgcGroups.map(g=>`<th style="color:${typeColor(g)}">${g}</th>`).join('')}<th>Total CPH</th></tr></thead><tbody>${
+  // Table: each show type's Editorial / Production / Post CPH + Overall CPH
+  document.getElementById('mom-cph1-table').innerHTML = `<table><thead><tr><th>Month</th>${
+    aiPgcGroups.map(g=>`<th colspan="2" style="color:${typeColor(g)};text-align:center">${g}</th>`).join('')
+  }</tr><tr><th></th>${aiPgcGroups.map(()=>'<th>Breakdown</th><th>Total CPH</th>').join('')}</tr></thead><tbody>${
     months.map(mo => {
-      const totalHr = (agg[mo]?.editHr||0) + (agg[mo]?.prodHr||0) + (agg[mo]?.fmHr||0);
-      const contribs = aiPgcGroups.map(g => {
+      const cells = aiPgcGroups.map(g => {
         const c = cphByAiPgc[mo]?.[g];
-        return c && totalHr > 0 ? +((c.editCost+c.voaCost+c.postCost)/totalHr).toFixed(2) : 0;
-      });
-      const total = contribs.reduce((s,v)=>s+v,0);
-      return `<tr><td>${fmt(mo)}</td>${contribs.map(v=>`<td>$${v.toFixed(2)}</td>`).join('')}<td><strong>$${total.toFixed(2)}</strong></td></tr>`;
+        if (!c) return '<td>—</td><td>—</td>';
+        const e = safeCPH(c.editCost, c.editHr);
+        const p = safeCPH(c.voaCost,  c.prodHr);
+        const f = safeCPH(c.postCost, c.fmHr);
+        return `<td style="font-size:0.68rem;color:var(--muted)">E:$${e.toFixed(0)} P:$${p.toFixed(0)} PP:$${f.toFixed(0)}</td><td><strong>$${(e+p+f).toFixed(2)}</strong></td>`;
+      }).join('');
+      return `<tr><td>${fmt(mo)}</td>${cells}</tr>`;
     }).join('')
   }</tbody></table>`;
 
