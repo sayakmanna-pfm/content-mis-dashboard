@@ -719,6 +719,9 @@ function renderMoMDashboard(data, months) {
   const ppvByYm        = {}; // { ym: { launches: n, ppv: n } }
   const cphByAiPgc = {}; // { ym: { aiPgc: { editCost, voaCost, postCost, editHr, prodHr, fmHr } } }
 
+  // Pre-build set of all PPV-validated show titles (show-level attribute, may be on any row)
+  const ppvShows = new Set(d.filter(r => r.ppv === 1).map(r => r.title).filter(Boolean));
+
   d.forEach(r => {
     // Totals
     if (!agg[r.ym]) agg[r.ym] = { editCost:0, voaCost:0, postCost:0, editHr:0, prodHr:0, fmHr:0, launches:0 };
@@ -751,7 +754,7 @@ function renderMoMDashboard(data, months) {
       launchByAiPgc[r.ym][gKey] = (launchByAiPgc[r.ym][gKey] || 0) + r.newLaunch;
       ppvByYm[r.ym] = ppvByYm[r.ym] || { launches:0, ppv:0 };
       ppvByYm[r.ym].launches += r.newLaunch;
-      if (r.ppv === 1) ppvByYm[r.ym].ppv += r.newLaunch;
+      if (ppvShows.has(r.title)) ppvByYm[r.ym].ppv += r.newLaunch;
     }
 
     // Prod+Post by VOA Type (col L)
