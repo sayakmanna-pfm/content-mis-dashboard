@@ -56,6 +56,9 @@ A single-file interactive HTML dashboard (`Content Dashboard.html`) that auto-lo
 ## Permanent Data Rules (always apply)
 1. **Exclude Growth Test shows** — filter out any row where `tag === 'Growth Test'` (column D)
 2. **Exclude March 2026 (202603)** — this month's data is incomplete
+3. **Exclude Solo Leveling** — filter out any row where `title === 'Solo Leveling'` (tracked separately)
+4. **Exclude UGC show type** — filter out any row where `aiPgc === 'UGC'` (column G, tracked separately)
+5. **Exclude blank show type** — filter out any row where `aiPgc` is empty/blank (column G)
 3. **Never bucket/classify column F (showType)** — always use raw values; `classifyType()` just returns the raw string. There are 30+ distinct values; grouping them causes "Other" to appear
 4. **Currency is USD ($)** — the `cFmt()` function uses `$` prefix, never ₹
 5. **Active Shows** = unique shows where `prodStatus > 0` in the latest selected month (not all-time unique titles)

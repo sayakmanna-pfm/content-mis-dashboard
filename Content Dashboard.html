@@ -633,6 +633,9 @@ function getFilteredData() {
   return rawData.filter(r => {
     if (r.ym === '202603') return false;
     if (r.tag === 'Growth Test') return false;
+    if (r.title === 'Solo Leveling') return false;
+    if (r.aiPgc === 'UGC') return false;
+    if (!r.aiPgc) return false;
     if (mStart && r.ym < mStart) return false;
     if (mEnd && r.ym > mEnd) return false;
     if (cat && r.category !== cat) return false;
