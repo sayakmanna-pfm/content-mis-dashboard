@@ -1470,9 +1470,7 @@ function renderMoMDashboard(data, months) {
   function safeCPH(cost, hrs) { return hrs > 0 ? +(cost / hrs).toFixed(2) : 0; }
   const yCphTick = { color:'#94a3b8', font:{size:11}, callback: v => '$'+v.toFixed(0) };
 
-  // KPI cards — latest month blended CPH
-  const latestMoKey = months[months.length - 1];
-  const la = agg[latestMoKey] || {};
+  // KPI cards — latest month blended CPH (la already declared above)
   const kpiEditCPH  = safeCPH(la.editCost || 0, la.editHr  || 0);
   const kpiProdCPH  = safeCPH(la.voaCost  || 0, la.prodHr  || 0);
   const kpiPostCPH  = safeCPH(la.postCost || 0, la.fmHr    || 0);
