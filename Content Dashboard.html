@@ -842,6 +842,11 @@ function renderMoMDashboard(data, months) {
   const l6Launch  = last6Mo.reduce((s,mo) => s+(ppvByYm[mo]?.launches||0), 0);
   const l6PPV     = last6Mo.reduce((s,mo) => s+(ppvByYm[mo]?.ppv||0),      0);
   const l6PPVpct  = l6Launch > 0 ? (l6PPV/l6Launch*100).toFixed(1) : '0.0';
+  const l6TotalCost = last6Mo.reduce((s,mo) => s+((agg[mo]?.editCost||0)+(agg[mo]?.voaCost||0)+(agg[mo]?.postCost||0)), 0);
+
+  // Efficiency metrics (last 6M)
+  const costPerLaunch = l6Launch > 0 ? l6TotalCost / l6Launch : 0;
+  const costPerPPV    = l6PPV    > 0 ? l6TotalCost / l6PPV    : 0;
 
   // Spend share %
   const editSharePct = lmTot > 0 ? (lmEdit/lmTot*100) : 0;
@@ -1004,6 +1009,30 @@ function renderMoMDashboard(data, months) {
             <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Cost</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${cFmt(lmTot)}</div></div>
             <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Hours</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${((la.editHr||0)+(la.prodHr||0)+(la.fmHr||0)).toFixed(1)}</div></div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 4: Efficiency metrics -->
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px">
+        <div style="width:44px;height:44px;border-radius:10px;background:#2dd4bf18;border:1px solid #2dd4bf30;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <div style="font-size:1.3rem;font-weight:800;color:#2dd4bf">↗</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.6rem;font-weight:700;color:#2dd4bf;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Cost per New Launch · Last 6M</div>
+          <div style="font-size:1.6rem;font-weight:800;color:var(--text);line-height:1">${costPerLaunch > 0 ? cFmt(costPerLaunch) : '—'}</div>
+          <div style="font-size:0.65rem;color:var(--muted);margin-top:5px">${cFmt(l6TotalCost)} total cost &nbsp;÷&nbsp; ${l6Launch} launches</div>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:16px">
+        <div style="width:44px;height:44px;border-radius:10px;background:#f472b618;border:1px solid #f472b630;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <div style="font-size:1.3rem;font-weight:800;color:#f472b6">★</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.6rem;font-weight:700;color:#f472b6;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Cost per PPV Show · Last 6M</div>
+          <div style="font-size:1.6rem;font-weight:800;color:var(--text);line-height:1">${costPerPPV > 0 ? cFmt(costPerPPV) : '—'}</div>
+          <div style="font-size:0.65rem;color:var(--muted);margin-top:5px">${cFmt(l6TotalCost)} total cost &nbsp;÷&nbsp; ${l6PPV} PPV shows</div>
         </div>
       </div>
     </div>
