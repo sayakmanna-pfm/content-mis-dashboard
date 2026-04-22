@@ -954,40 +954,56 @@ function renderMoMDashboard(data, months) {
         <div style="width:40px;height:40px;border-radius:8px;background:#8b5cf620;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <div style="font-size:1.1rem;font-weight:800;color:#8b5cf6">E</div>
         </div>
-        <div style="min-width:0">
+        <div style="min-width:0;flex:1">
           <div style="font-size:0.6rem;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:1px">Editorial CPH</div>
           <div style="font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.2">$${lmEditCPH.toFixed(2)}<span style="font-size:0.65rem;font-weight:400;color:var(--muted)">/hr</span></div>
           ${cphBadge(lmEditCPH, pmEditCPH)}
+          <div style="display:flex;gap:10px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+            <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Cost</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${cFmt(la.editCost||0)}</div></div>
+            <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Hours</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${(la.editHr||0).toFixed(1)}</div></div>
+          </div>
         </div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px">
         <div style="width:40px;height:40px;border-radius:8px;background:#10b98120;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <div style="font-size:1.1rem;font-weight:800;color:#10b981">P</div>
         </div>
-        <div style="min-width:0">
+        <div style="min-width:0;flex:1">
           <div style="font-size:0.6rem;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:1px">Production CPH</div>
           <div style="font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.2">$${lmProdCPH.toFixed(2)}<span style="font-size:0.65rem;font-weight:400;color:var(--muted)">/hr</span></div>
           ${cphBadge(lmProdCPH, pmProdCPH)}
+          <div style="display:flex;gap:10px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+            <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Cost</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${cFmt(la.voaCost||0)}</div></div>
+            <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Hours</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${(la.prodHr||0).toFixed(1)}</div></div>
+          </div>
         </div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px">
         <div style="width:40px;height:40px;border-radius:8px;background:#f59e0b20;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <div style="font-size:1.1rem;font-weight:800;color:#f59e0b">PP</div>
         </div>
-        <div style="min-width:0">
+        <div style="min-width:0;flex:1">
           <div style="font-size:0.6rem;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:1px">Post Prod CPH</div>
           <div style="font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.2">$${lmPostCPH.toFixed(2)}<span style="font-size:0.65rem;font-weight:400;color:var(--muted)">/hr</span></div>
           ${cphBadge(lmPostCPH, pmPostCPH)}
+          <div style="display:flex;gap:10px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+            <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Cost</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${cFmt(la.postCost||0)}</div></div>
+            <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Hours</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${(la.fmHr||0).toFixed(1)}</div></div>
+          </div>
         </div>
       </div>
       <div style="background:linear-gradient(135deg,#0f2a1e,#152a22);border:1px solid #2a5040;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px #34d39910">
         <div style="width:40px;height:40px;border-radius:8px;background:#34d39920;display:flex;align-items:center;justify-content:center;flex-shrink:0">
           <div style="font-size:1.1rem;font-weight:800;color:#34d399">Σ</div>
         </div>
-        <div style="min-width:0">
+        <div style="min-width:0;flex:1">
           <div style="font-size:0.6rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:1px">Total CPH</div>
           <div style="font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.2">$${lmTotCPH.toFixed(2)}<span style="font-size:0.65rem;font-weight:400;color:var(--muted)">/hr</span></div>
           ${cphBadge(lmTotCPH, pmTotCPH)}
+          <div style="display:flex;gap:10px;margin-top:6px;padding-top:6px;border-top:1px solid #2a5040">
+            <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Cost</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${cFmt(lmTot)}</div></div>
+            <div><div style="font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Hours</div><div style="font-size:0.75rem;font-weight:700;color:var(--text)">${((la.editHr||0)+(la.prodHr||0)+(la.fmHr||0)).toFixed(1)}</div></div>
+          </div>
         </div>
       </div>
     </div>
