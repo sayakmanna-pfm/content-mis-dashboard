@@ -722,6 +722,8 @@ function renderMoMDashboard(data, months) {
   const launchByAiPgc  = {}; // { ym: { aiPgc: launchCount } }
   const ppvByYm        = {}; // { ym: { launches: n, ppv: n } }
   const ppvByYmType    = {}; // { ym: { aiPgc: { launches, ppv } } }
+  const ppvByYmCat     = {}; // { ym: { category: { launches, ppv } } }
+  const ppvByYmTypeCat = {}; // { ym: { aiPgc: { category: { launches, ppv } } } }
   const cphByAiPgc = {}; // { ym: { aiPgc: { editCost, voaCost, postCost, editHr, prodHr, fmHr } } }
 
   // Pre-build set of all PPV-validated show titles (show-level attribute, may be on any row)
@@ -764,6 +766,16 @@ function renderMoMDashboard(data, months) {
       ppvByYmType[r.ym][gKey] = ppvByYmType[r.ym][gKey] || { launches:0, ppv:0 };
       ppvByYmType[r.ym][gKey].launches += 1;
       if (ppvShows.has(r.title)) ppvByYmType[r.ym][gKey].ppv += 1;
+      const cKey = r.category || 'Unknown';
+      ppvByYmCat[r.ym] = ppvByYmCat[r.ym] || {};
+      ppvByYmCat[r.ym][cKey] = ppvByYmCat[r.ym][cKey] || { launches:0, ppv:0 };
+      ppvByYmCat[r.ym][cKey].launches += 1;
+      if (ppvShows.has(r.title)) ppvByYmCat[r.ym][cKey].ppv += 1;
+      ppvByYmTypeCat[r.ym] = ppvByYmTypeCat[r.ym] || {};
+      ppvByYmTypeCat[r.ym][gKey] = ppvByYmTypeCat[r.ym][gKey] || {};
+      ppvByYmTypeCat[r.ym][gKey][cKey] = ppvByYmTypeCat[r.ym][gKey][cKey] || { launches:0, ppv:0 };
+      ppvByYmTypeCat[r.ym][gKey][cKey].launches += 1;
+      if (ppvShows.has(r.title)) ppvByYmTypeCat[r.ym][gKey][cKey].ppv += 1;
     }
 
     // Prod+Post by VOA Type (col L)
@@ -952,6 +964,7 @@ function renderMoMDashboard(data, months) {
             <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">% of New Launches that turned PPV · ${tabLabel} · up to ${latestMo}</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
+            <select id="ppv-genre-filter" style="font-size:0.72rem;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer"><option value="">All Genres</option><option value="Fantasy">Fantasy</option><option value="Romance">Romance</option></select>
             <select id="ppv-type-filter" style="font-size:0.72rem;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer"><option value="">All Show Types</option></select>
             <div class="mom-section-sub" id="mom-ppv-summary"></div>
           </div>
@@ -1242,15 +1255,23 @@ function renderMoMDashboard(data, months) {
   launchVoaSel.addEventListener('change', redrawLaunchChart);
   redrawLaunchChart();
 
-  // ── PPV% CHART (filterable by Show Type) ─────────────────────────────
-  const ppvTypeSel = document.getElementById('ppv-type-filter');
+  // ── PPV% CHART (filterable by Show Type + Genre) ─────────────────────
+  const ppvTypeSel  = document.getElementById('ppv-type-filter');
+  const ppvGenreSel = document.getElementById('ppv-genre-filter');
   aiPgcGroups.forEach(g => { const o = document.createElement('option'); o.value = g; o.textContent = g; ppvTypeSel.appendChild(o); });
 
   function redrawPpvChart() {
     const tf = ppvTypeSel.value;
-    const ppvPct    = months.map(mo => { const p = tf ? ppvByYmType[mo]?.[tf] : ppvByYm[mo]; return p && p.launches > 0 ? +(p.ppv / p.launches * 100).toFixed(1) : 0; });
-    const ppvCounts = months.map(mo => { const p = tf ? ppvByYmType[mo]?.[tf] : ppvByYm[mo]; return p ? p.ppv : 0; });
-    const ppvBase   = months.map(mo => { const p = tf ? ppvByYmType[mo]?.[tf] : ppvByYm[mo]; return p ? p.launches : 0; });
+    const gf = ppvGenreSel.value;
+    const getPpv = mo => {
+      if (tf && gf) return ppvByYmTypeCat[mo]?.[tf]?.[gf];
+      if (tf)       return ppvByYmType[mo]?.[tf];
+      if (gf)       return ppvByYmCat[mo]?.[gf];
+      return ppvByYm[mo];
+    };
+    const ppvPct    = months.map(mo => { const p = getPpv(mo); return p && p.launches > 0 ? +(p.ppv / p.launches * 100).toFixed(1) : 0; });
+    const ppvCounts = months.map(mo => { const p = getPpv(mo); return p ? p.ppv : 0; });
+    const ppvBase   = months.map(mo => { const p = getPpv(mo); return p ? p.launches : 0; });
     const tl = ppvBase.reduce((s,v)=>s+v,0), tp = ppvCounts.reduce((s,v)=>s+v,0);
     document.getElementById('mom-ppv-summary').innerHTML =
       `<span style="color:#f472b6;font-weight:700">${tl > 0 ? (tp/tl*100).toFixed(1) : 0}% overall</span>`;
@@ -1279,6 +1300,7 @@ function renderMoMDashboard(data, months) {
       }</tbody></table>`;
   }
   ppvTypeSel.addEventListener('change', redrawPpvChart);
+  ppvGenreSel.addEventListener('change', redrawPpvChart);
   redrawPpvChart();
 
   // ── CPH SECTION ───────────────────────────────────────────────────────
