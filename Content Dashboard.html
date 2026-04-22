@@ -631,7 +631,7 @@ function getFilteredData() {
   const type = document.getElementById('filter-type').value;
 
   return rawData.filter(r => {
-    if (r.ym === '202603') return false;
+    // 202603 now included — data is complete
     if (r.tag === 'Growth Test') return false;
     if (r.title === 'Solo Leveling') return false;
     if (r.aiPgc === 'UGC') return false;
