@@ -732,7 +732,7 @@ function renderMoMDashboard(data, months) {
     const a = agg[r.ym];
     a.editCost += r.editCost; a.voaCost += r.voaCost; a.postCost += r.postCost;
     a.editHr += r.editHr; a.prodHr += r.prodHr; a.fmHr += r.finalMastHr;
-    a.launches += r.newLaunch;
+    if (r.newLaunch > 0) a.launches += 1;
 
     // Editorial by AI/PGC (col G)
     const gKey = r.aiPgc || 'Unknown';
@@ -755,10 +755,10 @@ function renderMoMDashboard(data, months) {
     // Launches by AI/PGC
     if (r.newLaunch > 0) {
       launchByAiPgc[r.ym] = launchByAiPgc[r.ym] || {};
-      launchByAiPgc[r.ym][gKey] = (launchByAiPgc[r.ym][gKey] || 0) + r.newLaunch;
+      launchByAiPgc[r.ym][gKey] = (launchByAiPgc[r.ym][gKey] || 0) + 1;
       ppvByYm[r.ym] = ppvByYm[r.ym] || { launches:0, ppv:0 };
-      ppvByYm[r.ym].launches += r.newLaunch;
-      if (ppvShows.has(r.title)) ppvByYm[r.ym].ppv += r.newLaunch;
+      ppvByYm[r.ym].launches += 1;
+      if (ppvShows.has(r.title)) ppvByYm[r.ym].ppv += 1;
     }
 
     // Prod+Post by VOA Type (col L)
@@ -1192,7 +1192,7 @@ function renderMoMDashboard(data, months) {
     const aiPgcF = launchAiPgcSel.value;
     const voaF   = launchVoaSel.value;
     const rowsByMonth = getLaunchRows(aiPgcF, voaF);
-    const counts = rowsByMonth.map(rows => rows.reduce((s,r) => s + r.newLaunch, 0));
+    const counts = rowsByMonth.map(rows => rows.length);
 
     if (months.length >= 2) {
       const last = counts.length - 1;
@@ -1205,7 +1205,7 @@ function renderMoMDashboard(data, months) {
     const stackGroups = aiPgcF ? [aiPgcF] : launchAiPgcOrdered;
     const stackedDatasets = stackGroups.map(g => ({
       label: g, stack:'launch',
-      data: months.map((mo,i) => rowsByMonth[i].filter(r => r.aiPgc === g).reduce((s,r) => s + r.newLaunch, 0)),
+      data: months.map((mo,i) => rowsByMonth[i].filter(r => r.aiPgc === g).length),
       backgroundColor: typeColor(g)+'99', borderColor: typeColor(g), borderWidth:1.5, borderRadius:3
     }));
 
@@ -1225,7 +1225,7 @@ function renderMoMDashboard(data, months) {
       `<table><thead><tr><th>Month</th>${stackGroups.map(g=>`<th style="color:${typeColor(g)}">${g}</th>`).join('')}<th>Total</th></tr></thead><tbody>${
         [...months].reverse().map(mo => { const i = months.indexOf(mo);
           const rowSet = rowsByMonth[i];
-          return `<tr><td>${fmt(mo)}</td>${stackGroups.map(g=>`<td>${rowSet.filter(r=>r.aiPgc===g).reduce((s,r)=>s+r.newLaunch,0)}</td>`).join('')}<td><strong>${counts[i]}</strong></td></tr>`;
+          return `<tr><td>${fmt(mo)}</td>${stackGroups.map(g=>`<td>${rowSet.filter(r=>r.aiPgc===g).length}</td>`).join('')}<td><strong>${counts[i]}</strong></td></tr>`;
         }).join('')
       }</tbody></table>`;
   }
