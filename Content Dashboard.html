@@ -824,43 +824,203 @@ function renderMoMDashboard(data, months) {
   const lmTot  = lmEdit + lmVoa + lmPost;
   const lmLaunch = agg[lmKey]?.launches || 0;
   const pmTot  = pmKey ? ((agg[pmKey]?.editCost||0)+(agg[pmKey]?.voaCost||0)+(agg[pmKey]?.postCost||0)) : 0;
+
+  // CPH for latest & prior month (inline safe divide)
+  const _sc = (c,h) => h > 0 ? c/h : 0;
+  const la = agg[lmKey] || {}, pa = pmKey ? agg[pmKey]||{} : {};
+  const lmEditCPH = _sc(la.editCost||0, la.editHr||0);
+  const lmProdCPH = _sc(la.voaCost||0,  la.prodHr||0);
+  const lmPostCPH = _sc(la.postCost||0, la.fmHr||0);
+  const lmTotCPH  = lmEditCPH + lmProdCPH + lmPostCPH;
+  const pmEditCPH = _sc(pa.editCost||0, pa.editHr||0);
+  const pmProdCPH = _sc(pa.voaCost||0,  pa.prodHr||0);
+  const pmPostCPH = _sc(pa.postCost||0, pa.fmHr||0);
+  const pmTotCPH  = pmEditCPH + pmProdCPH + pmPostCPH;
+
+  // PPV% last 6 months (consolidated)
+  const last6Mo   = months.slice(-6);
+  const l6Launch  = last6Mo.reduce((s,mo) => s+(ppvByYm[mo]?.launches||0), 0);
+  const l6PPV     = last6Mo.reduce((s,mo) => s+(ppvByYm[mo]?.ppv||0),      0);
+  const l6PPVpct  = l6Launch > 0 ? (l6PPV/l6Launch*100).toFixed(1) : '0.0';
+
+  // Spend share %
+  const editSharePct = lmTot > 0 ? (lmEdit/lmTot*100) : 0;
+  const prodSharePct = lmTot > 0 ? (lmVoa /lmTot*100) : 0;
+  const postSharePct = lmTot > 0 ? (lmPost/lmTot*100) : 0;
+
   function momBadge(curr, prev) {
     if (!prev || prev === 0) return '';
     const pct = ((curr - prev) / prev * 100).toFixed(1);
     const up = curr >= prev;
     return `<span style="font-size:0.68rem;font-weight:700;color:${up?'#f59e0b':'#10b981'};margin-left:8px">${up?'▲':'▼'}${Math.abs(pct)}% MoM</span>`;
   }
+  function cphBadge(curr, prev) {
+    if (!prev || prev === 0) return '';
+    const pct = ((curr - prev) / prev * 100).toFixed(1);
+    const up = curr >= prev;
+    return `<div style="font-size:0.62rem;font-weight:700;color:${up?'#f59e0b':'#10b981'};margin-top:4px">${up?'▲':'▼'}${Math.abs(pct)}% MoM</div>`;
+  }
 
   // ── BUILD HTML ───────────────────────────────────────────────────────
   document.getElementById('mom-content').innerHTML = `
-    <!-- KPI CARDS -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px">
+    <!-- ═══ HEADLINE SECTION ═══ -->
+    ${tab === 'overall' ? `
+    <!-- HERO TOTAL SPEND CARD -->
+    <div style="background:linear-gradient(135deg,#152a22 0%,#1a3528 60%,#0f2a1e 100%);border:1px solid #2a5040;border-left:4px solid #34d399;border-radius:12px;padding:22px 28px 18px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 4px 24px #00000040">
+      <div style="position:absolute;right:28px;top:50%;transform:translateY(-50%);font-size:7rem;font-weight:900;color:#34d39908;line-height:1;pointer-events:none">$</div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:0.65rem;font-weight:700;color:#7aaa90;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px">Total Production Spend · ${latestMo}</div>
+          <div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap">
+            <span style="font-size:3rem;font-weight:800;color:#e6f5ee;line-height:1;letter-spacing:-1px">${cFmt(lmTot)}</span>
+            ${momBadge(lmTot,pmTot)}
+          </div>
+          <div style="font-size:0.72rem;color:#7aaa90;margin-top:6px">${tabLabel} · ${months.length} months · up to ${latestMo}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;padding-top:4px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:0.7rem;color:#8b5cf6;font-weight:600">Editorial</div>
+            <div style="font-size:1rem;font-weight:700;color:#e6f5ee">${cFmt(lmEdit)}</div>
+            <div style="font-size:0.68rem;color:#7aaa90;background:#8b5cf620;border-radius:4px;padding:1px 6px">${editSharePct.toFixed(1)}%</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:0.7rem;color:#10b981;font-weight:600">Production</div>
+            <div style="font-size:1rem;font-weight:700;color:#e6f5ee">${cFmt(lmVoa)}</div>
+            <div style="font-size:0.68rem;color:#7aaa90;background:#10b98120;border-radius:4px;padding:1px 6px">${prodSharePct.toFixed(1)}%</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="font-size:0.7rem;color:#f59e0b;font-weight:600">Post Prod</div>
+            <div style="font-size:1rem;font-weight:700;color:#e6f5ee">${cFmt(lmPost)}</div>
+            <div style="font-size:0.68rem;color:#7aaa90;background:#f59e0b20;border-radius:4px;padding:1px 6px">${postSharePct.toFixed(1)}%</div>
+          </div>
+        </div>
+      </div>
+      <!-- Spend breakdown bar -->
+      <div style="margin-top:16px">
+        <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px">
+          <div style="background:linear-gradient(90deg,#8b5cf6,#a78bfa);width:${editSharePct.toFixed(1)}%;transition:width 0.4s ease;border-radius:3px 0 0 3px"></div>
+          <div style="background:linear-gradient(90deg,#10b981,#34d399);width:${prodSharePct.toFixed(1)}%;transition:width 0.4s ease"></div>
+          <div style="background:linear-gradient(90deg,#f59e0b,#fbbf24);flex:1;transition:width 0.4s ease;border-radius:0 3px 3px 0"></div>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:8px">
+          <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#8b5cf6"></div><span style="font-size:0.65rem;color:#7aaa90">Editorial ${editSharePct.toFixed(0)}%</span></div>
+          <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#10b981"></div><span style="font-size:0.65rem;color:#7aaa90">Production ${prodSharePct.toFixed(0)}%</span></div>
+          <div style="display:flex;align-items:center;gap:4px"><div style="width:8px;height:8px;border-radius:2px;background:#f59e0b"></div><span style="font-size:0.65rem;color:#7aaa90">Post Prod ${postSharePct.toFixed(0)}%</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 2: Segment costs + New Launches + PPV% 6M -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:12px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-top:3px solid #8b5cf6;border-radius:10px;padding:14px 16px">
+        <div style="font-size:0.62rem;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Editorial Cost</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--text);line-height:1">${cFmt(lmEdit)}</div>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${momBadge(lmEdit,pa.editCost||0)}
+          <span style="font-size:0.65rem;color:var(--muted)">${editSharePct.toFixed(1)}% of total</span>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-top:3px solid #10b981;border-radius:10px;padding:14px 16px">
+        <div style="font-size:0.62rem;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Production Cost</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--text);line-height:1">${cFmt(lmVoa)}</div>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${momBadge(lmVoa,pa.voaCost||0)}
+          <span style="font-size:0.65rem;color:var(--muted)">${prodSharePct.toFixed(1)}% of total</span>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-top:3px solid #f59e0b;border-radius:10px;padding:14px 16px">
+        <div style="font-size:0.62rem;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Post Prod Cost</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--text);line-height:1">${cFmt(lmPost)}</div>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          ${momBadge(lmPost,pa.postCost||0)}
+          <span style="font-size:0.65rem;color:var(--muted)">${postSharePct.toFixed(1)}% of total</span>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-top:3px solid #14b8a6;border-radius:10px;padding:14px 16px">
+        <div style="font-size:0.62rem;font-weight:700;color:#14b8a6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">New Launches</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--text);line-height:1">${lmLaunch} <span style="font-size:0.75rem;font-weight:500;color:var(--muted)">shows</span></div>
+        <div style="margin-top:6px">${momBadge(lmLaunch,agg[pmKey]?.launches||0)}<span style="font-size:0.65rem;color:var(--muted);margin-left:${(agg[pmKey]?.launches||0)>0?'0':'0px'}">${latestMo}</span></div>
+      </div>
+      <div style="background:linear-gradient(135deg,#1a1030,#1e1535);border:1px solid #3b2a6b;border-top:3px solid #f472b6;border-radius:10px;padding:14px 16px">
+        <div style="font-size:0.62rem;font-weight:700;color:#f472b6;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">PPV% · Last 6M</div>
+        <div style="font-size:1.5rem;font-weight:800;color:var(--text);line-height:1">${l6PPVpct}<span style="font-size:0.9rem;font-weight:600;color:#f472b6">%</span></div>
+        <div style="font-size:0.65rem;color:var(--muted);margin-top:6px">${l6PPV} of ${l6Launch} launches</div>
+      </div>
+    </div>
+
+    <!-- ROW 3: CPH cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+        <div style="width:40px;height:40px;border-radius:8px;background:#8b5cf620;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <div style="font-size:1.1rem;font-weight:800;color:#8b5cf6">E</div>
+        </div>
+        <div style="min-width:0">
+          <div style="font-size:0.6rem;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:1px">Editorial CPH</div>
+          <div style="font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.2">$${lmEditCPH.toFixed(2)}<span style="font-size:0.65rem;font-weight:400;color:var(--muted)">/hr</span></div>
+          ${cphBadge(lmEditCPH, pmEditCPH)}
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+        <div style="width:40px;height:40px;border-radius:8px;background:#10b98120;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <div style="font-size:1.1rem;font-weight:800;color:#10b981">P</div>
+        </div>
+        <div style="min-width:0">
+          <div style="font-size:0.6rem;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:1px">Production CPH</div>
+          <div style="font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.2">$${lmProdCPH.toFixed(2)}<span style="font-size:0.65rem;font-weight:400;color:var(--muted)">/hr</span></div>
+          ${cphBadge(lmProdCPH, pmProdCPH)}
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px">
+        <div style="width:40px;height:40px;border-radius:8px;background:#f59e0b20;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <div style="font-size:1.1rem;font-weight:800;color:#f59e0b">PP</div>
+        </div>
+        <div style="min-width:0">
+          <div style="font-size:0.6rem;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:1px">Post Prod CPH</div>
+          <div style="font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.2">$${lmPostCPH.toFixed(2)}<span style="font-size:0.65rem;font-weight:400;color:var(--muted)">/hr</span></div>
+          ${cphBadge(lmPostCPH, pmPostCPH)}
+        </div>
+      </div>
+      <div style="background:linear-gradient(135deg,#0f2a1e,#152a22);border:1px solid #2a5040;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px #34d39910">
+        <div style="width:40px;height:40px;border-radius:8px;background:#34d39920;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <div style="font-size:1.1rem;font-weight:800;color:#34d399">Σ</div>
+        </div>
+        <div style="min-width:0">
+          <div style="font-size:0.6rem;font-weight:700;color:#34d399;text-transform:uppercase;letter-spacing:1px">Total CPH</div>
+          <div style="font-size:1.35rem;font-weight:800;color:var(--text);line-height:1.2">$${lmTotCPH.toFixed(2)}<span style="font-size:0.65rem;font-weight:400;color:var(--muted)">/hr</span></div>
+          ${cphBadge(lmTotCPH, pmTotCPH)}
+        </div>
+      </div>
+    </div>
+    ` : `
+    <!-- GENRE TAB: compact KPI row -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
       <div class="mom-section" style="padding:16px">
-        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Total Cost · ${latestMo}</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #f1f5f9;padding-left:10px">${cFmt(lmTot)}${momBadge(lmTot,pmTot)}</div>
+        <div style="font-size:0.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Total Cost · ${latestMo}</div>
+        <div style="font-size:1.5rem;font-weight:700;color:var(--text);border-left:3px solid #f1f5f9;padding-left:10px">${cFmt(lmTot)}${momBadge(lmTot,pmTot)}</div>
         <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${tabLabel}</div>
       </div>
       <div class="mom-section" style="padding:16px">
-        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Editorial Cost · ${latestMo}</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #8b5cf6;padding-left:10px">${cFmt(lmEdit)}${momBadge(lmEdit,agg[pmKey]?.editCost||0)}</div>
-        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((lmEdit/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+        <div style="font-size:0.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Editorial · ${latestMo}</div>
+        <div style="font-size:1.5rem;font-weight:700;color:var(--text);border-left:3px solid #8b5cf6;padding-left:10px">${cFmt(lmEdit)}${momBadge(lmEdit,pa.editCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${editSharePct.toFixed(1)}% of total</div>
       </div>
       <div class="mom-section" style="padding:16px">
-        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Production Cost · ${latestMo}</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #10b981;padding-left:10px">${cFmt(lmVoa)}${momBadge(lmVoa,agg[pmKey]?.voaCost||0)}</div>
-        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((lmVoa/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+        <div style="font-size:0.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Production · ${latestMo}</div>
+        <div style="font-size:1.5rem;font-weight:700;color:var(--text);border-left:3px solid #10b981;padding-left:10px">${cFmt(lmVoa)}${momBadge(lmVoa,pa.voaCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${prodSharePct.toFixed(1)}% of total</div>
       </div>
       <div class="mom-section" style="padding:16px">
-        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Post Prod Cost · ${latestMo}</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #f59e0b;padding-left:10px">${cFmt(lmPost)}${momBadge(lmPost,agg[pmKey]?.postCost||0)}</div>
-        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((lmPost/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+        <div style="font-size:0.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Post Prod · ${latestMo}</div>
+        <div style="font-size:1.5rem;font-weight:700;color:var(--text);border-left:3px solid #f59e0b;padding-left:10px">${cFmt(lmPost)}${momBadge(lmPost,pa.postCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${postSharePct.toFixed(1)}% of total</div>
       </div>
       <div class="mom-section" style="padding:16px">
-        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">New Launches · ${latestMo}</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #14b8a6;padding-left:10px">${lmLaunch}${momBadge(lmLaunch,agg[pmKey]?.launches||0)}</div>
+        <div style="font-size:0.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">New Launches · ${latestMo}</div>
+        <div style="font-size:1.5rem;font-weight:700;color:var(--text);border-left:3px solid #14b8a6;padding-left:10px">${lmLaunch}${momBadge(lmLaunch,agg[pmKey]?.launches||0)}</div>
         <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${months.length} months of data</div>
       </div>
     </div>
+    `}
     <!-- TOP ROW: Combined Cost + Hours side by side -->
     <div class="mom-grid" style="margin-bottom:20px">
       <div class="mom-section">
