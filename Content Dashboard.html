@@ -308,15 +308,16 @@
   .mom-section-title { font-size: 0.9rem; font-weight: 700; color: var(--text); }
   .mom-section-sub { font-size: 0.72rem; color: var(--muted); max-width: 240px; text-align: right; line-height: 1.5; }
   .mom-chart-body { position: relative; min-height: 240px; flex: 1; }
-  .mom-hrs-table { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
-  .mom-hrs-table table { width: 100%; border-collapse: collapse; font-size: 0.73rem; }
-  .mom-hrs-table th { color: var(--muted); font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-    padding: 3px 4px; border-bottom: 1px solid var(--border); text-align: right; }
+  .mom-hrs-table { overflow-x: auto; margin-top: 14px; font-size: 0.72rem; }
+  .mom-hrs-table table { width: 100%; border-collapse: collapse; }
+  .mom-hrs-table th { padding: 7px 12px; text-align: right; background: var(--surface2); color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 2px solid var(--border); position: sticky; top: 0; }
   .mom-hrs-table th:first-child { text-align: left; }
-  .mom-hrs-table td { padding: 4px 4px; border-bottom: 1px solid #ffffff06; color: var(--text);
-    text-align: right; font-variant-numeric: tabular-nums; }
-  .mom-hrs-table td:first-child { text-align: left; color: var(--muted); }
-  .mom-hrs-table tr:last-child td { border-bottom: none; }
+  .mom-hrs-table td { padding: 6px 12px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text); }
+  .mom-hrs-table td:first-child { text-align: left; color: var(--muted); font-weight: 600; }
+  .mom-hrs-table tr:first-child td { background: rgba(255,255,255,0.04); }
+  .mom-hrs-table tr:hover td { background: rgba(255,255,255,0.06); }
+  .mom-hrs-table tbody tr:nth-child(odd) td { background: rgba(255,255,255,0.02); }
+  .mom-hrs-table tbody tr:nth-child(odd):hover td, .mom-hrs-table tbody tr:nth-child(even):hover td { background: rgba(255,255,255,0.07); }
   @media (max-width: 1100px) { .mom-grid { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -791,26 +792,50 @@ function renderMoMDashboard(data, months) {
   const grandProdHr  = prodHrTotals.reduce((s,v)=>s+v,0);
   const grandFmHr    = fmHrTotals.reduce((s,v)=>s+v,0);
 
+  // Latest-month KPI values
+  const lmKey  = months[months.length - 1];
+  const pmKey  = months.length > 1 ? months[months.length - 2] : null;
+  const lmEdit = agg[lmKey]?.editCost  || 0;
+  const lmVoa  = agg[lmKey]?.voaCost   || 0;
+  const lmPost = agg[lmKey]?.postCost  || 0;
+  const lmTot  = lmEdit + lmVoa + lmPost;
+  const lmLaunch = agg[lmKey]?.launches || 0;
+  const pmTot  = pmKey ? ((agg[pmKey]?.editCost||0)+(agg[pmKey]?.voaCost||0)+(agg[pmKey]?.postCost||0)) : 0;
+  function momBadge(curr, prev) {
+    if (!prev || prev === 0) return '';
+    const pct = ((curr - prev) / prev * 100).toFixed(1);
+    const up = curr >= prev;
+    return `<span style="font-size:0.68rem;font-weight:700;color:${up?'#f59e0b':'#10b981'};margin-left:8px">${up?'▲':'▼'}${Math.abs(pct)}% MoM</span>`;
+  }
+
   // ── BUILD HTML ───────────────────────────────────────────────────────
   document.getElementById('mom-content').innerHTML = `
     <!-- KPI CARDS -->
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px">
       <div class="mom-section" style="padding:16px">
-        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Total Cost · ${tabLabel}</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #f1f5f9;padding-left:10px">${cFmt(grandOverall)}</div>
-        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">Latest: ${latestMo}</div>
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Total Cost · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #f1f5f9;padding-left:10px">${cFmt(lmTot)}${momBadge(lmTot,pmTot)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${tabLabel}</div>
       </div>
-      ${METRICS.map((m,i) => `
-        <div class="mom-section" style="padding:16px">
-          <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">${m.title}</div>
-          <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid ${m.color};padding-left:10px">${cFmt(grandTotals[i])}</div>
-          <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${grandOverall>0?((grandTotals[i]/grandOverall)*100).toFixed(1)+'% of total':'—'} · Latest: ${latestMo}</div>
-        </div>
-      `).join('')}
       <div class="mom-section" style="padding:16px">
-        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">New Launches</div>
-        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #14b8a6;padding-left:10px">${grandLaunches}</div>
-        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">across ${months.length} months · Latest: ${latestMo}</div>
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Editorial Cost · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #8b5cf6;padding-left:10px">${cFmt(lmEdit)}${momBadge(lmEdit,agg[pmKey]?.editCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((lmEdit/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Production Cost · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #10b981;padding-left:10px">${cFmt(lmVoa)}${momBadge(lmVoa,agg[pmKey]?.voaCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((lmVoa/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Post Prod Cost · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #f59e0b;padding-left:10px">${cFmt(lmPost)}${momBadge(lmPost,agg[pmKey]?.postCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((lmPost/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">New Launches · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #14b8a6;padding-left:10px">${lmLaunch}${momBadge(lmLaunch,agg[pmKey]?.launches||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${months.length} months of data</div>
       </div>
     </div>
     <!-- TOP ROW: Combined Cost + Hours side by side -->
@@ -1014,7 +1039,7 @@ function renderMoMDashboard(data, months) {
     }
   });
   document.getElementById('mom-edit-table').innerHTML = `<table><thead><tr><th>Month</th>${aiPgcGroups.map(g=>`<th style="color:${typeColor(g)}">${g}</th>`).join('')}<th>Total</th><th>Edit Hrs</th><th>MoM%</th></tr></thead><tbody>${
-    months.map((mo,i) => {
+    [...months].reverse().map(mo => { const i = months.indexOf(mo);
       const prev = i>0?editVals[i-1]:null, mom=prev&&prev>0?((editVals[i]-prev)/prev*100).toFixed(1):null;
       const momHtml = mom==null?'—':`<span style="color:${parseFloat(mom)>0?'#f59e0b':'#10b981'};font-weight:700">${parseFloat(mom)>0?'▲':'▼'}${Math.abs(mom)}%</span>`;
       return `<tr><td>${fmt(mo)}</td>${aiPgcGroups.map(g=>`<td>${cFmt(editByAiPgc[mo]?.[g]||0)}</td>`).join('')}<td><strong>${cFmt(editVals[i])}</strong></td><td>${(editHrsVals[i]||0).toFixed(1)}</td><td>${momHtml}</td></tr>`;
@@ -1056,7 +1081,7 @@ function renderMoMDashboard(data, months) {
   const prodHrsVals = months.map(mo => totVal(mo, 'prodHr'));
   const fmHrsVals   = months.map(mo => totVal(mo, 'fmHr'));
   document.getElementById('mom-prodpost-table').innerHTML = `<table><thead><tr><th>Month</th>${voaGroups.map(vt=>`<th style="color:${typeColor(vt)}">${vt}</th>`).join('')}<th>Total</th><th>Prod Hrs</th><th>Post Hrs</th><th>MoM%</th></tr></thead><tbody>${
-    months.map((mo,i) => {
+    [...months].reverse().map(mo => { const i = months.indexOf(mo);
       const prev = i>0?prodPostTotals[i-1]:null, mom=prev&&prev>0?((prodPostTotals[i]-prev)/prev*100).toFixed(1):null;
       const momHtml = mom==null?'—':`<span style="color:${parseFloat(mom)>0?'#f59e0b':'#10b981'};font-weight:700">${parseFloat(mom)>0?'▲':'▼'}${Math.abs(mom)}%</span>`;
       return `<tr><td>${fmt(mo)}</td>${voaGroups.map(vt=>`<td>${cFmt((ppByVoaType[mo]?.[vt]?.voaCost||0)+(ppByVoaType[mo]?.[vt]?.postCost||0))}</td>`).join('')}<td><strong>${cFmt(prodPostTotals[i])}</strong></td><td>${(prodHrsVals[i]||0).toFixed(1)}</td><td>${(fmHrsVals[i]||0).toFixed(1)}</td><td>${momHtml}</td></tr>`;
@@ -1195,7 +1220,7 @@ function renderMoMDashboard(data, months) {
     });
     document.getElementById('mom-launch-table').innerHTML =
       `<table><thead><tr><th>Month</th>${stackGroups.map(g=>`<th style="color:${typeColor(g)}">${g}</th>`).join('')}<th>Total</th></tr></thead><tbody>${
-        months.map((mo,i) => {
+        [...months].reverse().map(mo => { const i = months.indexOf(mo);
           const rowSet = rowsByMonth[i];
           return `<tr><td>${fmt(mo)}</td>${stackGroups.map(g=>`<td>${rowSet.filter(r=>r.aiPgc===g).reduce((s,r)=>s+r.newLaunch,0)}</td>`).join('')}<td><strong>${counts[i]}</strong></td></tr>`;
         }).join('')
@@ -1233,7 +1258,9 @@ function renderMoMDashboard(data, months) {
   });
   document.getElementById('mom-ppv-table').innerHTML =
     `<table><thead><tr><th>Month</th><th>Launches</th><th>PPV Count</th><th>PPV%</th></tr></thead><tbody>${
-      months.map((mo,i) => `<tr><td>${fmt(mo)}</td><td>${ppvBase[i]}</td><td>${ppvCounts[i]}</td><td><strong>${ppvPct[i]}%</strong></td></tr>`).join('')
+      [...months].reverse().map(mo => { const i = months.indexOf(mo);
+        return `<tr><td>${fmt(mo)}</td><td>${ppvBase[i]}</td><td>${ppvCounts[i]}</td><td><strong>${ppvPct[i]}%</strong></td></tr>`;
+      }).join('')
     }</tbody></table>`;
 
   // ── CPH SECTION ───────────────────────────────────────────────────────
@@ -1301,7 +1328,7 @@ function renderMoMDashboard(data, months) {
   document.getElementById('mom-cph1-table').innerHTML = `<table><thead><tr><th>Month</th>${
     aiPgcGroups.map(g=>`<th colspan="2" style="color:${typeColor(g)};text-align:center">${g}</th>`).join('')
   }</tr><tr><th></th>${aiPgcGroups.map(()=>'<th>Breakdown</th><th>Total CPH</th>').join('')}</tr></thead><tbody>${
-    months.map(mo => {
+    [...months].reverse().map(mo => {
       const cells = aiPgcGroups.map(g => {
         const c = cphByAiPgc[mo]?.[g];
         if (!c) return '<td>—</td><td>—</td>';
@@ -1360,7 +1387,7 @@ function renderMoMDashboard(data, months) {
       }
     });
     document.getElementById('mom-cph2-table').innerHTML = `<table><thead><tr><th>Month</th><th style="color:#8b5cf6">Edit CPH</th><th style="color:#10b981">Prod CPH</th><th style="color:#f59e0b">Post CPH</th><th>Total CPH</th><th>MoM%</th></tr></thead><tbody>${
-      segData.map((s,i) => {
+      [...months].reverse().map(mo => { const i = months.indexOf(mo); const s = segData[i];
         const total = s.editCPH + s.prodCPH + s.postCPH;
         const prev  = i > 0 ? segData[i-1].editCPH + segData[i-1].prodCPH + segData[i-1].postCPH : null;
         const mom   = prev && prev > 0 ? ((total - prev)/prev*100).toFixed(1) : null;
