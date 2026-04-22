@@ -9,12 +9,12 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0f172a;
-    --surface: #1e293b;
-    --surface2: #263346;
-    --border: #334155;
-    --text: #f1f5f9;
-    --muted: #94a3b8;
+    --bg: #f1f5f9;
+    --surface: #ffffff;
+    --surface2: #e8edf3;
+    --border: #cbd5e1;
+    --text: #0f172a;
+    --muted: #64748b;
     --blue: #3b82f6;
     --green: #10b981;
     --amber: #f59e0b;
@@ -995,10 +995,10 @@ function renderMoMDashboard(data, months) {
 
   // ── INDIVIDUAL COST BAR CHARTS ───────────────────────────────────────
   const yCostTick = { color:'#94a3b8', font:{size:11}, callback: v => '$'+(v>=1000?(v/1000).toFixed(0)+'k':Math.round(v)) };
-  const xStackCfg = { stacked:true, ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } };
+  const xStackCfg = { stacked:true, ticks:{ color:'#64748b', font:{size:11} }, grid:{ color:'#e2e8f0' } };
   const yStackCfg = { stacked:true, max:maxCostY, ticks:yCostTick, grid:{ color:'#334155' } };
-  const legendCfg = { labels:{ color:'#94a3b8', font:{size:11}, padding:12 } };
-  const xLineCfg  = { ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } };
+  const legendCfg = { labels:{ color:'#64748b', font:{size:11}, padding:12 } };
+  const xLineCfg  = { ticks:{ color:'#64748b', font:{size:11} }, grid:{ color:'#e2e8f0' } };
   const yHrTick   = { color:'#94a3b8', font:{size:11}, callback: v => v.toFixed(0)+'h' };
   function lineDatasets(groups, byAiPgc) {
     const groupLines = groups.map(g => ({
@@ -1010,7 +1010,7 @@ function renderMoMDashboard(data, months) {
     const totalLine = {
       label:'Total', type:'line', order:0,
       data: months.map(mo => groups.reduce((s,g) => s + (byAiPgc[mo]?.[g] || 0), 0)),
-      borderColor:'#f1f5f9', backgroundColor:'#f1f5f922',
+      borderColor:'#0f172a', backgroundColor:'#0f172a22',
       borderWidth:3.5, pointRadius:5, pointHoverRadius:7,
       borderDash:[], tension:0.3, fill:false
     };
@@ -1123,11 +1123,11 @@ function renderMoMDashboard(data, months) {
       responsive:true, maintainAspectRatio:false,
       interaction:{ mode:'index', intersect:false },
       plugins:{
-        legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:14 }},
+        legend:{ labels:{ color:'#64748b', font:{size:11}, padding:14 }},
         tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${cFmt(c.parsed.y)}` }}
       },
       scales:{
-        x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+        x:{ ticks:{ color:'#64748b', font:{size:11} }, grid:{ color:'#e2e8f0' } },
         y:{ ticks:{ color:'#94a3b8', font:{size:11},
           callback: v => '$'+(v>=1000?(v/1000).toFixed(0)+'k':Math.round(v)) },
           grid:{ color:'#334155' } }
@@ -1151,11 +1151,11 @@ function renderMoMDashboard(data, months) {
       responsive:true, maintainAspectRatio:false,
       interaction:{ mode:'index', intersect:false },
       plugins:{
-        legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:14 }},
+        legend:{ labels:{ color:'#64748b', font:{size:11}, padding:14 }},
         tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)} hrs` }}
       },
       scales:{
-        x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+        x:{ ticks:{ color:'#64748b', font:{size:11} }, grid:{ color:'#e2e8f0' } },
         y:{ ticks:{ color:'#94a3b8', font:{size:11}, callback: v => v.toFixed(0)+'h' }, grid:{ color:'#334155' } }
       }
     }
@@ -1213,7 +1213,7 @@ function renderMoMDashboard(data, months) {
         responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
         plugins:{ legend: legendCfg, tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: ${c.parsed.y} launches` }} },
         scales:{
-          x:{ stacked:true, ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+          x:{ stacked:true, ticks:{ color:'#64748b', font:{size:11} }, grid:{ color:'#e2e8f0' } },
           y:{ stacked:true, ticks:{ color:'#94a3b8', font:{size:11}, stepSize:1 }, grid:{ color:'#334155' } }
         }
       }
@@ -1251,7 +1251,7 @@ function renderMoMDashboard(data, months) {
       plugins:{ legend:{ display:false },
         tooltip:{ callbacks:{ label: c => ` ${c.parsed.y}% (${ppvCounts[c.dataIndex]} of ${ppvBase[c.dataIndex]} launches)` }} },
       scales:{
-        x:{ ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+        x:{ ticks:{ color:'#64748b', font:{size:11} }, grid:{ color:'#e2e8f0' } },
         y:{ min:0, max:100, ticks:{ color:'#94a3b8', font:{size:11}, callback: v => v+'%' }, grid:{ color:'#334155' } }
       }
     }
@@ -1304,7 +1304,7 @@ function renderMoMDashboard(data, months) {
     data:{ labels:months.map(fmt), datasets: cph1Datasets },
     options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
       plugins:{
-        legend:{ labels:{ color:'#94a3b8', font:{size:11}, padding:12,
+        legend:{ labels:{ color:'#64748b', font:{size:11}, padding:12,
           filter: item => !item.text.startsWith('__') }},
         tooltip:{ callbacks:{
           label: c => {
@@ -1320,7 +1320,7 @@ function renderMoMDashboard(data, months) {
           }
         }}
       },
-      scales:{ x:{ stacked:true, ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+      scales:{ x:{ stacked:true, ticks:{ color:'#64748b', font:{size:11} }, grid:{ color:'#e2e8f0' } },
                y:{ stacked:true, ticks: yCphTick, grid:{ color:'#334155' } } }
     }
   });
@@ -1382,7 +1382,7 @@ function renderMoMDashboard(data, months) {
         plugins:{ legend: legendCfg,
           tooltip:{ callbacks:{ label: c => ` ${c.dataset.label}: $${c.parsed.y.toFixed(2)}/hr`,
             footer: items => ` Total: $${items.reduce((s,i)=>s+i.parsed.y,0).toFixed(2)}/hr` }} },
-        scales:{ x:{ stacked:true, ticks:{ color:'#94a3b8', font:{size:11} }, grid:{ color:'#334155' } },
+        scales:{ x:{ stacked:true, ticks:{ color:'#64748b', font:{size:11} }, grid:{ color:'#e2e8f0' } },
                  y:{ stacked:true, ticks: yCphTick, grid:{ color:'#334155' } } }
       }
     });
@@ -1417,7 +1417,7 @@ function renderMoMDashboard(data, months) {
       const totalHr = (agg[mo]?.editHr||0) + (agg[mo]?.prodHr||0) + (agg[mo]?.fmHr||0);
       return safeCPH((agg[mo]?.editCost||0)+(agg[mo]?.voaCost||0)+(agg[mo]?.postCost||0), totalHr);
     }),
-    borderColor:'#f1f5f9', backgroundColor:'#f1f5f922',
+    borderColor:'#0f172a', backgroundColor:'#0f172a22',
     borderWidth:3.5, pointRadius:5, pointHoverRadius:7, tension:0.3, fill:false
   });
   charts['mom-cph-trend'] = new Chart(document.getElementById('mom-cph-trend-chart').getContext('2d'), {
