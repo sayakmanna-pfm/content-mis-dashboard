@@ -376,6 +376,9 @@
     <!-- MoM CONTENT -->
     <div id="mom-content"></div>
 
+    <!-- SOLO LEVELING SECTION (tracked separately, never in overall) -->
+    <div id="sl-section" style="margin-top:32px"></div>
+
   </div>
 </div>
 
@@ -1470,6 +1473,217 @@ function renderMoMDashboard(data, months) {
   });
 }
 
+// ─── SOLO LEVELING SECTION ────────────────────────────────────────────
+function renderSoloLevelingSection() {
+  const mStart = document.getElementById('filter-month-start').value;
+  const mEnd   = document.getElementById('filter-month-end').value;
+
+  // Pull Solo Leveling rows directly from rawData (bypasses getFilteredData exclusion)
+  const slData = rawData.filter(r => {
+    if (r.title !== 'Solo Leveling') return false;
+    if (mStart && r.ym < mStart) return false;
+    if (mEnd   && r.ym > mEnd)   return false;
+    return true;
+  });
+
+  const slMonths = [...new Set(slData.map(r => r.ym))].sort();
+  const el = document.getElementById('sl-section');
+
+  if (slData.length === 0) { el.innerHTML = ''; return; }
+
+  // Aggregate by month
+  const slAgg = {};
+  slData.forEach(r => {
+    if (!slAgg[r.ym]) slAgg[r.ym] = { editCost:0, voaCost:0, postCost:0, editHr:0, prodHr:0, fmHr:0, launches:0 };
+    const a = slAgg[r.ym];
+    a.editCost += r.editCost; a.voaCost += r.voaCost; a.postCost += r.postCost;
+    a.editHr   += r.editHr;   a.prodHr  += r.prodHr;  a.fmHr    += r.finalMastHr;
+    if (r.newLaunch > 0) a.launches += 1;
+  });
+
+  function slSafeCPH(cost, hrs) { return hrs > 0 ? +(cost / hrs).toFixed(2) : 0; }
+
+  const lmKey = slMonths[slMonths.length - 1];
+  const pmKey = slMonths.length > 1 ? slMonths[slMonths.length - 2] : null;
+  const la    = slAgg[lmKey] || {};
+  const pa    = pmKey ? slAgg[pmKey] || {} : {};
+  const lmTot  = (la.editCost||0) + (la.voaCost||0) + (la.postCost||0);
+  const pmTot  = (pa.editCost||0) + (pa.voaCost||0) + (pa.postCost||0);
+  const latestMo = fmt(lmKey);
+  const accent = '#f59e0b'; // gold accent for Solo Leveling
+
+  function slBadge(curr, prev) {
+    if (!prev || prev === 0) return '';
+    const pct = ((curr - prev) / prev * 100).toFixed(1);
+    const up = curr >= prev;
+    return `<span style="font-size:0.68rem;font-weight:700;color:${up?'#ef4444':'#10b981'};margin-left:8px">${up?'▲':'▼'}${Math.abs(pct)}% MoM</span>`;
+  }
+
+  // CPH for latest month
+  const kpiEditCPH = slSafeCPH(la.editCost||0, la.editHr||0);
+  const kpiProdCPH = slSafeCPH(la.voaCost||0,  la.prodHr||0);
+  const kpiPostCPH = slSafeCPH(la.postCost||0, la.fmHr||0);
+  const kpiTotCPH  = kpiEditCPH + kpiProdCPH + kpiPostCPH;
+
+  // Monthly data arrays
+  const editCosts  = slMonths.map(mo => slAgg[mo]?.editCost || 0);
+  const voaCosts   = slMonths.map(mo => slAgg[mo]?.voaCost  || 0);
+  const postCosts  = slMonths.map(mo => slAgg[mo]?.postCost || 0);
+  const editHrs    = slMonths.map(mo => slAgg[mo]?.editHr   || 0);
+  const prodHrs    = slMonths.map(mo => slAgg[mo]?.prodHr   || 0);
+  const fmHrs      = slMonths.map(mo => slAgg[mo]?.fmHr     || 0);
+  const editCPHs   = slMonths.map((mo,i) => slSafeCPH(editCosts[i], editHrs[i]));
+  const prodCPHs   = slMonths.map((mo,i) => slSafeCPH(voaCosts[i],  prodHrs[i]));
+  const postCPHs   = slMonths.map((mo,i) => slSafeCPH(postCosts[i], fmHrs[i]));
+  const totCPHs    = slMonths.map((_,i)  => editCPHs[i] + prodCPHs[i] + postCPHs[i]);
+  const totalCosts = slMonths.map((_,i)  => editCosts[i] + voaCosts[i] + postCosts[i]);
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid ${accent}40">
+      <div style="background:${accent};color:#000;font-size:0.7rem;font-weight:800;padding:4px 10px;border-radius:4px;letter-spacing:0.5px;text-transform:uppercase">Tracked Separately</div>
+      <div style="font-size:1.1rem;font-weight:700;color:${accent}">Solo Leveling</div>
+      <div style="font-size:0.75rem;color:var(--muted)">${fmt(slMonths[0])} – ${latestMo} · ${slMonths.length} months</div>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Total Cost · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid ${accent};padding-left:10px">${cFmt(lmTot)}${slBadge(lmTot,pmTot)}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Editorial Cost · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #8b5cf6;padding-left:10px">${cFmt(la.editCost||0)}${slBadge(la.editCost||0,pa.editCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((la.editCost/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Production Cost · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #10b981;padding-left:10px">${cFmt(la.voaCost||0)}${slBadge(la.voaCost||0,pa.voaCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((la.voaCost/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Post Prod Cost · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #f59e0b;padding-left:10px">${cFmt(la.postCost||0)}${slBadge(la.postCost||0,pa.postCost||0)}</div>
+        <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${lmTot>0?((la.postCost/lmTot)*100).toFixed(1)+'% of total':'—'}</div>
+      </div>
+    </div>
+
+    <!-- CPH KPI CARDS -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Editorial CPH · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #8b5cf6;padding-left:10px">$${kpiEditCPH.toFixed(2)}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Production CPH · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #10b981;padding-left:10px">$${kpiProdCPH.toFixed(2)}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Post Prod CPH · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid #f59e0b;padding-left:10px">$${kpiPostCPH.toFixed(2)}</div>
+      </div>
+      <div class="mom-section" style="padding:16px">
+        <div style="font-size:0.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Total CPH · ${latestMo}</div>
+        <div style="font-size:1.6rem;font-weight:700;color:var(--text);border-left:3px solid ${accent};padding-left:10px">$${kpiTotCPH.toFixed(2)}</div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW -->
+    <div class="mom-grid" style="margin-bottom:20px">
+      <div class="mom-section">
+        <div class="mom-section-hdr"><div>
+          <div class="mom-section-title" style="border-left:3px solid ${accent};padding-left:8px">Cost by Segment</div>
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Editorial · Production · Post Production</div>
+        </div></div>
+        <div class="mom-chart-body"><canvas id="sl-cost-chart"></canvas></div>
+      </div>
+      <div class="mom-section">
+        <div class="mom-section-hdr"><div>
+          <div class="mom-section-title" style="border-left:3px solid #a78bfa;padding-left:8px">CPH Trend</div>
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:3px;padding-left:11px">Editorial · Production · Post Production CPH</div>
+        </div></div>
+        <div class="mom-chart-body"><canvas id="sl-cph-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- DETAIL TABLE -->
+    <div class="mom-section">
+      <div class="mom-section-hdr"><div>
+        <div class="mom-section-title" style="border-left:3px solid ${accent};padding-left:8px">Monthly Breakdown</div>
+      </div></div>
+      <div class="mom-hrs-table" id="sl-table"></div>
+    </div>
+  `;
+
+  // Destroy old charts if re-rendering
+  ['sl-cost-chart','sl-cph-chart'].forEach(id => { if (charts[id]) { charts[id].destroy(); delete charts[id]; } });
+
+  const slXCfg = { ticks:{ color:'#7aaa90', font:{size:11} }, grid:{ color:'#1e3d30' } };
+  const slGridY = { color:'#334155' };
+
+  // Cost stacked bar
+  charts['sl-cost-chart'] = new Chart(document.getElementById('sl-cost-chart').getContext('2d'), {
+    type:'bar',
+    data:{ labels: slMonths.map(fmt), datasets:[
+      { label:'Editorial',       stack:'sl', data:editCosts,  backgroundColor:'#8b5cf699', borderColor:'#8b5cf6', borderWidth:1.5, borderRadius:2 },
+      { label:'Production',      stack:'sl', data:voaCosts,   backgroundColor:'#10b98199', borderColor:'#10b981', borderWidth:1.5 },
+      { label:'Post Production', stack:'sl', data:postCosts,  backgroundColor:'#f59e0b99', borderColor:'#f59e0b', borderWidth:1.5 },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{ labels:{ color:'#7aaa90', font:{size:11}, padding:12 } },
+        tooltip:{ callbacks:{
+          label: c => ` ${c.dataset.label}: ${cFmt(c.parsed.y)}`,
+          footer: items => ` Total: ${cFmt(items.reduce((s,i)=>s+i.parsed.y,0))}`
+        }}},
+      scales:{ x:{ stacked:true, ...slXCfg }, y:{ stacked:true, ticks:{ color:'#7aaa90', font:{size:11}, callback:v=>'$'+v.toLocaleString() }, grid:slGridY } }
+    }
+  });
+
+  // CPH stacked bar
+  charts['sl-cph-chart'] = new Chart(document.getElementById('sl-cph-chart').getContext('2d'), {
+    type:'bar',
+    data:{ labels: slMonths.map(fmt), datasets:[
+      { label:'Editorial CPH',       stack:'slcph', data:editCPHs, backgroundColor:'#8b5cf699', borderColor:'#8b5cf6', borderWidth:1.5, borderRadius:2 },
+      { label:'Production CPH',      stack:'slcph', data:prodCPHs, backgroundColor:'#10b98199', borderColor:'#10b981', borderWidth:1.5 },
+      { label:'Post Production CPH', stack:'slcph', data:postCPHs, backgroundColor:'#f59e0b99', borderColor:'#f59e0b', borderWidth:1.5 },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{ labels:{ color:'#7aaa90', font:{size:11}, padding:12 } },
+        tooltip:{ callbacks:{
+          label: c => ` ${c.dataset.label}: $${c.parsed.y.toFixed(2)}/hr`,
+          footer: items => ` Total CPH: $${items.reduce((s,i)=>s+i.parsed.y,0).toFixed(2)}/hr`
+        }}},
+      scales:{ x:{ stacked:true, ...slXCfg }, y:{ stacked:true, ticks:{ color:'#7aaa90', font:{size:11}, callback:v=>'$'+v.toFixed(0) }, grid:slGridY } }
+    }
+  });
+
+  // Detail table (most recent month first)
+  document.getElementById('sl-table').innerHTML = `<table>
+    <thead><tr>
+      <th>Month</th>
+      <th style="color:#8b5cf6">Editorial</th><th style="color:#10b981">Production</th><th style="color:#f59e0b">Post Prod</th><th>Total Cost</th>
+      <th>Edit Hrs</th><th>Prod Hrs</th><th>FM Hrs</th>
+      <th style="color:#8b5cf6">Edit CPH</th><th style="color:#10b981">Prod CPH</th><th style="color:#f59e0b">Post CPH</th><th>Total CPH</th>
+      <th>MoM%</th>
+    </tr></thead>
+    <tbody>${[...slMonths].reverse().map(mo => {
+      const i = slMonths.indexOf(mo);
+      const a = slAgg[mo] || {};
+      const tot = (a.editCost||0)+(a.voaCost||0)+(a.postCost||0);
+      const prevTot = i > 0 ? ((slAgg[slMonths[i-1]]?.editCost||0)+(slAgg[slMonths[i-1]]?.voaCost||0)+(slAgg[slMonths[i-1]]?.postCost||0)) : null;
+      const mom = prevTot && prevTot > 0 ? ((tot-prevTot)/prevTot*100).toFixed(1) : null;
+      const momHtml = mom == null ? '—' : `<span style="color:${parseFloat(mom)>0?'#f59e0b':'#10b981'};font-weight:700">${parseFloat(mom)>0?'▲':'▼'}${Math.abs(mom)}%</span>`;
+      return `<tr>
+        <td><strong>${fmt(mo)}</strong></td>
+        <td>${cFmt(a.editCost||0)}</td><td>${cFmt(a.voaCost||0)}</td><td>${cFmt(a.postCost||0)}</td><td><strong>${cFmt(tot)}</strong></td>
+        <td>${(a.editHr||0).toFixed(1)}</td><td>${(a.prodHr||0).toFixed(1)}</td><td>${(a.fmHr||0).toFixed(1)}</td>
+        <td>$${editCPHs[i].toFixed(2)}</td><td>$${prodCPHs[i].toFixed(2)}</td><td>$${postCPHs[i].toFixed(2)}</td><td><strong>$${totCPHs[i].toFixed(2)}</strong></td>
+        <td>${momHtml}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
 // ─── RENDER DASHBOARD ─────────────────────────────────────────────────
 function renderDashboard() {
   const data = getFilteredData();
@@ -1477,6 +1691,7 @@ function renderDashboard() {
   updateHeader(data, months);
   buildMainTabs(data);
   renderMoMDashboard(data, months);
+  renderSoloLevelingSection();
 }
 </script>
 </body>
